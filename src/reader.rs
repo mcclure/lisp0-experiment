@@ -1,6 +1,7 @@
 // Turns unicode string iterator into parse tree
 
 use std::collections::HashSet;
+use std::fmt;
 
 #[derive(Debug)]
 enum QuoteKind {
@@ -61,9 +62,18 @@ pub struct Output {
 
 #[derive(Debug, Clone)]
 pub struct Error {
-	at: ReaderPosition,
-	error: String
+	pub tag: String, // "Filename"
+	pub at: ReaderPosition, // FIXME: source member meaningless
+	pub message: String
 }
+
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "Syntax: {} line {} column {}: {}", self.tag, self.at.line, self.at.column, self.message)
+	}
+}
+
+impl std::error::Error for Error {}
 
 fn generate_illegal_chars() -> HashSet<char> {
 	let mut illegal: HashSet<char> = Default::default();
@@ -95,17 +105,17 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			}
 		}
 
-		'process: {
+		'process: { // For early abort
 			match state {
 			    ReadState::Scan(_) | ReadState::Identifier | ReadState::Number => {
-	    			println!("{} {}", ch, ch == ')' || ch == ']' || ch == '}');
-
+			    	// Illegal chars
 			    	if illegal.contains(&ch) {
-			    		return Err(Error {at, error:format!("Illegal unicode char: U+{:x}", ch as u32)});
+			    		return Err(Error {at, tag, message:format!("Illegal unicode char: U+{:x}", ch as u32)});
 			    	}
 
+			    	// Close parens
 			    	if ch == ')' || ch == ']' || ch == '}' {
-			    		return Err(Error {at, error:format!("Unbalanced {} parenthesis", ch)});
+			    		return Err(Error {at, tag, message:format!("Unbalanced {} parenthesis", ch)});
 			    	}
 			    },
 			    _ => (),

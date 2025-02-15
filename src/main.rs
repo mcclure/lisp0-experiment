@@ -8,7 +8,7 @@ const VERSION:&str = "0.1";
 
 mod reader;
 
-fn main() -> io::Result<()> {
+fn main() -> anyhow::Result<()> {
     use clap::Parser;
 
     #[derive(Parser)]
@@ -27,10 +27,10 @@ fn main() -> io::Result<()> {
     if let Some(filepath) = cli.filepath {
         let file = fs::File::open(filepath.clone());
         let mut chars = char_reader::CharReader::new(file?);
-        let v = reader::ast(chars, filepath.to_string_lossy().into_owned());
+        let v = reader::ast(chars, filepath.to_string_lossy().into_owned())?;
 
         Ok(())
     } else {
-        Err(io::Error::new(io::ErrorKind::InvalidInput, format!("No filename given")))
+        Err(io::Error::new(io::ErrorKind::InvalidInput, format!("No filename given")))?
     }
 }

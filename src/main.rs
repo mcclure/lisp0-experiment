@@ -6,6 +6,8 @@ use char_reader::CharReader;
 
 const VERSION:&str = "0.1";
 
+mod reader;
+
 fn main() -> io::Result<()> {
     use clap::Parser;
 
@@ -23,11 +25,10 @@ fn main() -> io::Result<()> {
     }
 
     if let Some(filepath) = cli.filepath {
-        let file = fs::File::open(filepath);
+        let file = fs::File::open(filepath.clone());
         let mut chars = char_reader::CharReader::new(file?);
-        while let Ok(Some(ch)) = chars.next_char() {
-            // TODO
-        }
+        let v = reader::ast(chars, filepath.to_string_lossy().into_owned());
+
         Ok(())
     } else {
         Err(io::Error::new(io::ErrorKind::InvalidInput, format!("No filename given")))

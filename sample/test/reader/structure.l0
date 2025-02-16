@@ -1,0 +1,28 @@
+# Convoluted expressions to test reader edge cases.
+
+a # comment
+(b c) # comment
+( # comment
+ d #comment
+    e
+    f \
+    g
+    h \ # comment
+    i
+    (j \
+    )
+    ( \
+    k
+    )
+    ( \
+# comment
+    l
+    )
+
+    ( \
+
+    # comment
+
+    m
+    )
+)

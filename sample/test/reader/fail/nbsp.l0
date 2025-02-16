@@ -1,0 +1,6 @@
+# Enforce rules on "confusing" characters
+# Expect failure
+
+# TODO: test in various reader states and test all four illegal chars
+
+﻿

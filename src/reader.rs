@@ -37,8 +37,8 @@ pub enum AstContent {
 
 #[derive(Debug)]
 pub struct AstNode {
-	at:ReaderPosition,
-	content:AstContent
+	pub at:ReaderPosition,
+	pub content:AstContent
 }
 
 #[derive(Debug)]
@@ -144,11 +144,13 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			continue; // Do NOTHING, not even increment line counters
 		}
 
+		println!("Parsing: {ch}");
 		// Always aborts after one iteration, but is loop to allow continue
 		// "break" for "finish character", "continue" for "retry character"
 		'process: loop {
+			println!("\tState: {:?}", state.clone());
 			match state.clone() {
-			    ReadState::Scan(_) | ReadState::Identifier | ReadState::Number => { // "Normal"
+			    ReadState::Scan(_) => { // "Normal"
 			    	if illegal.contains(&ch) { // Illegal chars
 			    		return Err(Error {at, tag, message:format!("Illegal unicode char: U+{:x}", ch as u32)});
 			    	}
@@ -288,7 +290,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	}
 			    },
 			}
-			break;
+			break 'process;
 		}
 
 		// Increment

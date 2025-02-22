@@ -7,14 +7,17 @@ use char_reader::CharReader;
 const VERSION:&str = "0.1";
 
 mod reader;
+mod util;
 
 fn main() -> anyhow::Result<()> {
     use clap::Parser;
 
     #[derive(Parser)]
     struct Cli {
-        #[arg(short='v')]
+        #[arg(short='v', long="version")]
         version: bool,
+        #[arg(long="debug-ast", help="(Internal debug) Show reader output")]
+        debug_ast: bool,
         filepath: Option<PathBuf>
     }
     let cli = Cli::parse();
@@ -28,6 +31,10 @@ fn main() -> anyhow::Result<()> {
         let file = fs::File::open(filepath.clone());
         let mut chars = char_reader::CharReader::new(file?);
         let v = reader::ast(chars, filepath.to_string_lossy().into_owned())?;
+
+        if cli.debug_ast {
+            println!("{}", crate::util::ast_to_string(&v.source));
+        }
 
         Ok(())
     } else {

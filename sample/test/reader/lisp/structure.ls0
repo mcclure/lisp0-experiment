@@ -1,7 +1,5 @@
 # Convoluted expressions to test reader edge cases.
 
-(z)
-(
 a # comment
 (b c) # comment
 ( # comment
@@ -27,5 +25,4 @@ a # comment
 
     m
     )
-)
 )

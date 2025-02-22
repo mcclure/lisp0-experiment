@@ -3,27 +3,7 @@
 use std::collections::HashSet;
 use std::fmt;
 
-#[derive(Debug)]
-enum ReadState {
-	Scan(bool), // True if looking for BOM
-	Comment(bool), // True if in backslash mode
-	Backslash(bool), // True if newline cleared
-	Identifier,
-	Number,
-	Quote(bool, u8) // is_raw, Number of quotes
-	// TODO: '
-}
-
-#[derive(Debug)]
-enum GroupKind {
-	Normal,
-	Array
-}
-
-#[derive(Debug)]
-struct ReadFrame {
-
-}
+type num = i64;
 
 #[derive(Debug, Clone)]
 struct ReaderPosition {
@@ -33,13 +13,26 @@ struct ReaderPosition {
 }
 
 #[derive(Debug)]
+enum ReadState { // FIXME: Could this be merged with the "ReadFrame" below?
+	Scan(bool), // True if looking for BOM
+	Comment(bool), // True if in backslash mode
+	Backslash(bool), // True if newline cleared
+	Minus(ReaderPosition),
+	Identifier,
+	Number,
+	Quote(bool, u8) // is_raw, Number of quotes
+	// TODO: '
+}
+
+#[derive(Debug)]
 pub enum AstContent {
-	Identifier(String),
-	Int(i64),
-	Float(f64),
-	Quote(Box<AstContent>),
+	Nil,
+	True,
 	String(String),
-	Group(GroupKind, Vec<AstNode>)
+	Int(i64),
+	//Float(f64),
+	Quote(Box<AstNode>),
+	Group(Vec<AstNode>)
 }
 
 #[derive(Debug)]
@@ -83,9 +76,13 @@ fn is_whitespace(ch: char) -> bool { // TODO UNICODE
 	ch == ' ' || ch == '\r' || ch == '\n'
 }
 
-fn is_num_start(ch:char) -> bool { // TODO UNICODE
+fn is_num(ch:char) -> bool { // TODO UNICODE
 	let ch = ch as u32;
 	ch >= '0' as u32 && ch <= '9' as u32
+}
+
+fn parse_num(ch:char) -> num { // ASSUMES PREFILTERED
+	return ch as num - '0' as num;
 }
 
 fn is_word_start(ch:char) -> bool { // TODO UNICODE
@@ -110,19 +107,27 @@ fn is_raw_quote_close(ch:char) -> bool { // TODO UNICODE
 }
 
 fn is_word(ch:char) -> bool {
-	is_num_start(ch) || is_word_start(ch)
+	is_num(ch) || is_word_start(ch)
 }
 
 static illegal_chars:std::sync::LazyLock<HashSet<char>> = std::sync::LazyLock::new(generate_illegal_chars);
 
+fn die() -> ! {
+	panic!("Reader internal error. Please run again with RUST_BACKTRACE=1");
+}
+
 // Take input as well as a string identifying the source (such as a filename)
 pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) -> Result<Output, Error> {
 	let mut state = ReadState::Scan(true);
-	let mut stack: Vec<ReadFrame> = Default::default();
-	let mut source = AstNode {at:ReaderPosition{source:0, line:0, column:0}, content:AstContent::Group(GroupKind::Normal, vec![])};
+	let mut stack: Vec<AstNode> = Default::default();
+	const NO_POSITION: ReaderPosition = ReaderPosition{source:0, line:0, column:0};
+	const PLACEHOLDER:AstNode =  AstNode { at:NO_POSITION, content:AstContent::Nil };
+	let mut source = AstNode { at:NO_POSITION, content:AstContent::Group(Default::default())};
 	let mut at = ReaderPosition{source:0, line:1, column:1};
 	let mut last_cr = false; // For merging \r\n
 	let illegal = &*illegal_chars;
+
+	stack.push(source);
 
 	while let Ok(Some(ch)) = chars.next_char() {
 		// BOM
@@ -139,7 +144,9 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			continue; // Do NOTHING, not even increment line counters
 		}
 
-		'process: loop { // Always aborts after one iteration, but is loop to allow continue
+		// Always aborts after one iteration, but is loop to allow continue
+		// "break" for "finish character", "continue" for "retry character"
+		'process: loop {
 			match &state {
 			    ReadState::Scan(_) | ReadState::Identifier | ReadState::Number => { // "Normal"
 			    	if illegal.contains(&ch) { // Illegal chars
@@ -156,29 +163,41 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    		break 'process;
 			    	}
 
-			    	if is_num_start(ch) {
+			    	if ch == '-' {
+			    		state = ReadState::Minus(at);
+			    	}
+
+			    	if is_num(ch) {
 			    		state = ReadState::Number;
+
+				    	stack.push(AstNode {at,content:AstContent::Int(0)});
+
 			    		continue 'process;
 			    	}
 
 			    	if is_word_start(ch) {
-			    		state = ReadState::Number;
+			    		state = ReadState::Identifier;
+
+				    	stack.push(AstNode {at,content:AstContent::String("".to_string())});
+
 			    		continue 'process;
 			    	}
 
-			    	if is_normal_quote_open(ch) {
-			    		state = ReadState::Quote(false, 1);
-			    		break 'process;
-			    	}
+			    	let normal_quote = is_normal_quote_open(ch);
 
-			    	if is_raw_quote_open(ch) {
-			    		state = ReadState::Quote(true, 1);
+			    	if normal_quote || is_raw_quote_open(ch) {
+			    		state = ReadState::Quote(!normal_quote, 1);
+
+				    	//let Some(AstNode {content:AstContent::Group(v),..}) = stack.last();
+				    	stack.push(AstNode {at,content:AstContent::Quote(Box::new(PLACEHOLDER))});
+				    	stack.push(AstNode {at,content:AstContent::String("".to_string())});
+
 			    		break 'process;
 			    	}
 
 			    	// Close parens
 			    	if ch == ')' || ch == ']' || ch == '}' {
-			    		if (stack.len() <= 1) {
+			    		if stack.len() <= 1 {
 				    		return Err(Error {at, tag, message:format!("Unbalanced extra {} parenthesis", ch)});
 				    	} else {
 				    		// TODO
@@ -187,7 +206,26 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 
 			    	// Close parens
 			    	if ch == '(' || ch == '[' || ch == '{' {
-			    		// TODO
+			    		state = ReadState::Scan(false);
+
+			    		match ch {
+			    			'[' => {
+			    				return Err(Error {at, tag, message:format!("No [ support yet")});
+			    				stack.push(AstNode {at, content:AstContent::Group(vec![
+			    					AstNode {at, content:AstContent::String("map".to_string())},
+			    					AstNode {at, content:AstContent::String("eval".to_string())}
+			    				])})
+			    			},
+			    			'{' => {
+			    				return Err(Error {at, tag, message:format!("No {{ support yet")});
+					    		stack.push(AstNode {at, content:AstContent::Quote(Box::new(PLACEHOLDER))}); // FIXME this box will be thrown away
+					    		stack.push(AstNode {at, content:AstContent::Group(Default::default())});
+			    			},
+			    			_ => ()
+			    		}
+			    		stack.push(AstNode {at, content:AstContent::Group(Default::default())});
+
+			    		continue 'process;
 			    	}
 			    },
 			    ReadState::Comment(in_backslash) => {
@@ -213,10 +251,29 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    		}
 			    	}
 			    },
+			    ReadState::Minus(node_at) => {
+			    	if is_num(ch) { // It's a number
+			    		state = ReadState::Number;
+
+				    	stack.push(AstNode {at:*node_at, content:AstContent::Int(-parse_num(ch))});
+
+				    	break 'process;
+			    	}
+
+			    	state = ReadState::Identifier; // It's not, and never was, a number
+			    	continue 'process;
+			    }
 			    ReadState::Identifier => {
 			    	if is_whitespace(ch) {
+			    		// PUSH
 			    		state = ReadState::Scan(false);
+			    		continue 'process;
 			    	}
+
+			    	let Some(AstNode {content:AstContent::String(mut v),..}) = &stack.last() else { die(); };
+			    	v.push(ch);
+//			    	let mut (AstNode {_, content:Ast}) = &stack.last().unwrap();
+			    	stack.push(AstNode {at, content:AstContent::String("".to_string())});
 			    },
 			    ReadState::Number => {
 			    	if is_whitespace(ch) {

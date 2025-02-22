@@ -3,6 +3,9 @@
 use std::collections::HashSet;
 use std::fmt;
 
+// If EVERYTHING'S broken
+const TRACE_DEBUG:bool = false;
+
 type num = i64;
 
 #[derive(Debug, Clone, Copy)]
@@ -144,11 +147,11 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			continue; // Do NOTHING, not even increment line counters
 		}
 
-		println!("Parsing: {ch}");
+		if TRACE_DEBUG { eprintln!("Parsing: {ch}"); }
 		// Always aborts after one iteration, but is loop to allow continue
 		// "break" for "finish character", "continue" for "retry character"
 		'process: loop {
-			println!("\tState: {:?}", state.clone());
+			if TRACE_DEBUG { eprintln!("\tState: {:?}", state.clone()); }
 			match state.clone() {
 			    ReadState::Scan(_) => { // "Normal"
 			    	if illegal.contains(&ch) { // Illegal chars

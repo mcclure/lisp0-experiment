@@ -5,14 +5,14 @@ use std::fmt;
 
 type num = i64;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct ReaderPosition {
 	source:u32, // source_tag index
 	line:u32, // 1-indexed
 	column:u32 // 1-indexed
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum ReadState { // FIXME: Could this be merged with the "ReadFrame" below?
 	Scan(bool), // True if looking for BOM
 	Comment(bool), // True if in backslash mode
@@ -147,7 +147,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 		// Always aborts after one iteration, but is loop to allow continue
 		// "break" for "finish character", "continue" for "retry character"
 		'process: loop {
-			match &state {
+			match state.clone() {
 			    ReadState::Scan(_) | ReadState::Identifier | ReadState::Number => { // "Normal"
 			    	if illegal.contains(&ch) { // Illegal chars
 			    		return Err(Error {at, tag, message:format!("Illegal unicode char: U+{:x}", ch as u32)});
@@ -230,7 +230,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    },
 			    ReadState::Comment(in_backslash) => {
 			    	if is_newline { // Ignore unless newline
-			    		state = if *in_backslash {
+			    		state = if in_backslash {
 			    			ReadState::Backslash(true) // Still in backslash, newline cleared
 			    		} else {
 			    			ReadState::Scan(false) // Return to "Normal"
@@ -255,7 +255,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	if is_num(ch) { // It's a number
 			    		state = ReadState::Number;
 
-				    	stack.push(AstNode {at:*node_at, content:AstContent::Int(-parse_num(ch))});
+				    	stack.push(AstNode {at:node_at, content:AstContent::Int(-parse_num(ch))});
 
 				    	break 'process;
 			    	}
@@ -270,10 +270,8 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    		continue 'process;
 			    	}
 
-			    	let Some(AstNode {content:AstContent::String(mut v),..}) = &stack.last() else { die(); };
+			    	let Some(AstNode {content:AstContent::String(ref mut v),..}) = stack.last_mut() else { die(); };
 			    	v.push(ch);
-//			    	let mut (AstNode {_, content:Ast}) = &stack.last().unwrap();
-			    	stack.push(AstNode {at, content:AstContent::String("".to_string())});
 			    },
 			    ReadState::Number => {
 			    	if is_whitespace(ch) {
@@ -284,8 +282,8 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	if is_newline {
 			    		return Err(Error {at, tag, message:format!("Newline inside string")})  // TODO: Sanitize ch printout
 			    	}
-			    	if !*is_raw && is_normal_quote_close(ch)
-			    	||  *is_raw && is_raw_quote_close(ch) {
+			    	if !is_raw && is_normal_quote_close(ch)
+			    	||  is_raw && is_raw_quote_close(ch) {
 			    		state = ReadState::Scan(false);
 			    	}
 			    },
@@ -299,8 +297,12 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 		last_cr = ch == '\r';
 	}
 
+	if stack.len() > 1 {
+		return Err(Error {at, tag, message:format!("Expected ) at end of input")})
+	}
+
 	Ok(Output {
 		source_tag: vec![tag],
-		source
+		source: stack.pop().unwrap()
 	})
 }

@@ -1,10 +1,11 @@
 // Turns unicode string iterator into parse tree
 
+use std::borrow::BorrowMut;
 use std::collections::HashSet;
 use std::fmt;
 
 // If EVERYTHING'S broken
-const TRACE_DEBUG:bool = false;
+const TRACE_DEBUG:bool = true;
 
 type num = i64;
 
@@ -126,6 +127,24 @@ fn die() -> ! {
 	panic!("Reader internal error. Please run again with RUST_BACKTRACE=1");
 }
 
+// Merge 1 layer of the stack upward.
+fn peel(stack: &mut Vec<AstNode>) {
+	loop {
+		let top = stack.pop().unwrap();
+		let into = &mut stack.last_mut().unwrap().content;
+		match into {
+			AstContent::Quote(bx) => {
+				**bx = top;
+			}
+			AstContent::Group(v) => {
+				v.push(top);
+				break;
+			}
+			_ => die()
+		}
+	}
+}
+
 // Take input as well as a string identifying the source (such as a filename)
 pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) -> Result<Output, Error> {
 	let mut state = ReadState::Scan(true);
@@ -150,15 +169,15 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 
 		let is_newline = ch == '\r' || ch == '\n';
 		if ch == '\n' && last_cr {
-			last_cr == false;
+			last_cr = false;
 			continue; // Do NOTHING, not even increment line counters
 		}
 
-		if TRACE_DEBUG { eprintln!("Parsing: {ch}"); }
+		if TRACE_DEBUG { eprintln!("Parsing: `{ch}`"); }
 		// Always aborts after one iteration, but is loop to allow continue
 		// "break" for "finish character", "continue" for "retry character"
 		'process: loop {
-			if TRACE_DEBUG { eprintln!("\tState: {:?}", state.clone()); }
+			if TRACE_DEBUG { eprintln!("\tState: {:?} Depth: {}", state.clone(), stack.len()); }
 			match state.clone() {
 			    ReadState::Scan(_) => { // "Normal"
 			    	if illegal.contains(&ch) { // Illegal chars
@@ -200,7 +219,11 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	let normal_quote = is_normal_quote_open(ch);
 
 			    	if normal_quote || is_raw_quote_open(ch) {
-			    		state = ReadState::Quote(!normal_quote, false);
+			    		state = ReadState::Quote(if normal_quote {
+			    			QuoteState::Normal
+			    		} else {
+			    			QuoteState::Raw
+			    		});
 
 				    	//let Some(AstNode {content:AstContent::Group(v),..}) = stack.last();
 				    	stack.push(AstNode {at,content:AstContent::Quote(Box::new(PLACEHOLDER))});
@@ -214,7 +237,9 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    		if stack.len() <= 1 {
 				    		return Err(Error {at, tag, message:format!("Unbalanced extra {} parenthesis", ch)});
 				    	} else {
-				    		// TODO
+				    		peel(&mut stack);
+
+				    		break 'process;
 				    	}
 			    	}
 
@@ -239,13 +264,14 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    		}
 			    		stack.push(AstNode {at, content:AstContent::Group(Default::default())});
 
-			    		continue 'process;
+			    		break 'process;
 			    	}
 
 			    	// If we're still here, it must be a legal identifier character
 		    		state = ReadState::Identifier;
 
 			    	stack.push(AstNode {at,content:AstContent::String("".to_string())});
+			    	continue 'process;
 			    },
 			    ReadState::Comment(in_backslash) => {
 			    	if is_newline { // Ignore unless newline
@@ -288,6 +314,8 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	if is_whitespace(ch) {
 			    		// PUSH
 			    		state = ReadState::Scan(false);
+			    		peel(&mut stack);
+
 			    		break 'process;
 			    	}
 
@@ -297,7 +325,15 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    ReadState::Number => {
 			    	if is_whitespace(ch) {
 			    		state = ReadState::Scan(false);
+			    		peel(&mut stack);
+
+			    		break 'process;
 			    	}
+
+			    	let Some(AstNode {content:AstContent::Int(ref mut i),..}) = stack.last_mut() else { die(); };
+			    	let i2 = parse_num(ch); 
+			    	*i *= 10;
+			    	*i += if *i >= 0 { i2 } else { -i2 };
 			    },
 			    ReadState::Quote(quote_state) => {
 			    	let closed = ||
@@ -312,6 +348,9 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 				    		} else {
 				    			if closed() {
 						    		state = ReadState::Scan(false);
+						    		peel(&mut stack);
+
+						    		break 'process;
 				    			} else {
 				    				append = Some(ch);
 				    			}
@@ -354,6 +393,22 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 	}
 
 	if stack.len() > 1 {
+		let into = &mut stack.last_mut().unwrap().content;
+		match into {
+			AstContent::Group(_) => (),
+			_ => {
+				if TRACE_DEBUG {
+					eprintln!("Extra peel");
+				}
+
+				peel(&mut stack);
+			}
+		}
+	}
+	if stack.len() > 1 {
+		if TRACE_DEBUG {
+			eprintln!("Final stack depth {}: {:?}", stack.len(), stack);
+		}
 		return Err(Error {at, tag, message:format!("Expected ) at end of input")})
 	}
 

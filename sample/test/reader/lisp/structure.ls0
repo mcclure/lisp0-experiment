@@ -1,5 +1,7 @@
-# Convoluted expressions to test reader edge cases.
+# Convoluted expressions to test reader edge cases. (LISP reader)
 
+(z)
+(
 a # comment
 (b c) # comment
 ( # comment
@@ -25,4 +27,5 @@ a # comment
 
     m
     )
+)
 )

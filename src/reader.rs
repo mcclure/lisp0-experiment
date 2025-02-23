@@ -15,6 +15,14 @@ struct ReaderPosition {
 	column:u32 // 1-indexed
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum QuoteState {
+	Normal,
+	Raw,
+	Backslash, // Last char was backslash
+	BackslashNewline // In backslash newline chomp
+}
+
 #[derive(Debug, Clone)]
 enum ReadState { // FIXME: Could this be merged with the "ReadFrame" below?
 	Scan(bool), // True if looking for BOM
@@ -23,8 +31,7 @@ enum ReadState { // FIXME: Could this be merged with the "ReadFrame" below?
 	Minus(ReaderPosition),
 	Identifier,
 	Number,
-	Quote(bool, u8) // is_raw, Number of quotes
-	// TODO: '
+	Quote(QuoteState) // is_raw, is_escaped
 }
 
 #[derive(Debug)]
@@ -158,6 +165,10 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    		return Err(Error {at, tag, message:format!("Illegal unicode char: U+{:x}", ch as u32)});
 			    	}
 
+			    	if is_whitespace(ch) {
+			    		break 'process;
+			    	}
+
 			    	if ch == '#' { // Comment
 			    		state = ReadState::Comment(false);
 			    		break 'process;
@@ -172,6 +183,12 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    		state = ReadState::Minus(at);
 			    	}
 
+			    	if ch == '\'' { // '
+				    	stack.push(AstNode {at,content:AstContent::Quote(Box::new(PLACEHOLDER))});
+
+			    		break 'process;
+			    	}
+
 			    	if is_num(ch) {
 			    		state = ReadState::Number;
 
@@ -180,18 +197,10 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    		continue 'process;
 			    	}
 
-			    	if is_word_start(ch) {
-			    		state = ReadState::Identifier;
-
-				    	stack.push(AstNode {at,content:AstContent::String("".to_string())});
-
-			    		continue 'process;
-			    	}
-
 			    	let normal_quote = is_normal_quote_open(ch);
 
 			    	if normal_quote || is_raw_quote_open(ch) {
-			    		state = ReadState::Quote(!normal_quote, 1);
+			    		state = ReadState::Quote(!normal_quote, false);
 
 				    	//let Some(AstNode {content:AstContent::Group(v),..}) = stack.last();
 				    	stack.push(AstNode {at,content:AstContent::Quote(Box::new(PLACEHOLDER))});
@@ -232,6 +241,11 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 
 			    		continue 'process;
 			    	}
+
+			    	// If we're still here, it must be a legal identifier character
+		    		state = ReadState::Identifier;
+
+			    	stack.push(AstNode {at,content:AstContent::String("".to_string())});
 			    },
 			    ReadState::Comment(in_backslash) => {
 			    	if is_newline { // Ignore unless newline
@@ -266,31 +280,68 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	}
 
 			    	state = ReadState::Identifier; // It's not, and never was, a number
+			    	stack.push(AstNode {at:node_at,content:AstContent::String("-".to_string())});
+
 			    	continue 'process;
 			    }
 			    ReadState::Identifier => {
 			    	if is_whitespace(ch) {
 			    		// PUSH
 			    		state = ReadState::Scan(false);
-			    		continue 'process;
+			    		break 'process;
 			    	}
 
-			    	let Some(AstNode {content:AstContent::String(ref mut v),..}) = stack.last_mut() else { die(); };
-			    	v.push(ch);
+			    	let Some(AstNode {content:AstContent::String(ref mut s),..}) = stack.last_mut() else { die(); };
+			    	s.push(ch);
 			    },
 			    ReadState::Number => {
 			    	if is_whitespace(ch) {
 			    		state = ReadState::Scan(false);
 			    	}
 			    },
-			    ReadState::Quote(is_raw, count) => {
-			    	if is_newline {
-			    		return Err(Error {at, tag, message:format!("Newline inside string")})  // TODO: Sanitize ch printout
-			    	}
-			    	if !is_raw && is_normal_quote_close(ch)
-			    	||  is_raw && is_raw_quote_close(ch) {
-			    		state = ReadState::Scan(false);
-			    	}
+			    ReadState::Quote(quote_state) => {
+			    	let closed = ||
+			    		quote_state != QuoteState::Raw && is_normal_quote_close(ch)
+				    	||  quote_state == QuoteState::Raw && is_raw_quote_close(ch);
+				    let mut append: Option<char> = None;
+
+					match quote_state {
+						QuoteState::Normal | QuoteState::Raw => {
+							if is_newline {
+					    		return Err(Error {at, tag, message:format!("Newline inside string")})  // TODO: Sanitize ch printout
+				    		} else {
+				    			if closed() {
+						    		state = ReadState::Scan(false);
+				    			} else {
+				    				append = Some(ch);
+				    			}
+				    		}
+						}
+						QuoteState::Backslash => {
+							if is_newline {
+								state = ReadState::Quote(QuoteState::BackslashNewline);
+							} else {
+								match ch {
+									't' => append = Some('\t'),
+									'n' => append = Some('\n'),
+									'\\' => append = Some('\\'),
+									'\"' => append = Some('"'),
+									_ => return Err(Error {at, tag, message:format!("Unrecognized backslash sequence \\{}", ch)})
+								}
+							}
+						}
+						QuoteState::BackslashNewline => {
+							if !is_whitespace(ch) {
+								state = ReadState::Quote(QuoteState::Normal);
+								continue 'process;
+							}
+						}
+				    }
+
+				    if let Some(ch2) = append {
+				    	let Some(AstNode {content:AstContent::String(ref mut s),..}) = stack.last_mut() else { die(); };
+			    		s.push(ch2);
+				    }
 			    },
 			}
 			break 'process;

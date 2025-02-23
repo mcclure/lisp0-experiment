@@ -14,9 +14,20 @@ A statement is a series of symbols. A symbol is:
 
 	* An identifier, as described below.
 	* A number, as described below.
-	* Any number of `'` marks followed by an identifier or number.
+	* Any number of `'` marks followed by a symbol.
 	* A string, as described below.
 	* A paired `()`, `{}` or `[]` delimiter containing zero or more statements.
+
+An identifier is a sequence of characters not including `#`, `\` or any whitespace, quote, delimiter character; and which does not a legal number as a prefix.
+
+A string is:
+	* A `"` character, followed by a sequence of non-newline characters and ending with another ". Within a `"` string, a backslash followed by another character has special meaning:
+		* `\\t` - a tab
+		* `\\n` - a tab
+		* `\\\\` - a backslash
+		* `\"` - a quote (does not terminate string)
+
+	* A `\`` character, followed by a sequence of non-newline characters and ending with another `.
 
 ## Unicode oddness
 

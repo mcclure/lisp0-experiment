@@ -1,0 +1,9 @@
+# Convoluted expressions to test quotes
+
+a "b" c
+("e " " f")
+g "h\t\ni\\j\"k" "l\
+
+
+   m n" o
+   p

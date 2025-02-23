@@ -1,0 +1,11 @@
+# Convoluted expressions to test quotes (LISP reader)
+
+(
+a "b" c
+("e " " f")
+g "h\t\ni\\j\"k" "l\
+
+
+   m n" o
+   p
+)

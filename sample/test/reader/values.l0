@@ -1,0 +1,10 @@
+# Non-identifier types
+# Expect: (("a", '"b", '"c", 13, ''"d", '''"e", '("f", ''("g"))))
+
+a
+"b"
+'c
+13
+''d
+''"e"
+'(f ''(g))

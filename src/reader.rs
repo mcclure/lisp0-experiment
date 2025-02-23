@@ -5,9 +5,13 @@ use std::collections::HashSet;
 use std::fmt;
 
 // If EVERYTHING'S broken
-const TRACE_DEBUG:bool = true;
+const TRACE_DEBUG:bool = false;
 
 type num = i64;
+
+// "Quote" means something different to the Reader than elsewhere.
+// To the Reader, "Quote" means "text between quotation marks".
+// Elsewhere, "quote" means something is "wrapped" as with ' or ".
 
 #[derive(Debug, Clone, Copy)]
 struct ReaderPosition {
@@ -106,7 +110,7 @@ fn is_normal_quote_open(ch:char) -> bool { // TODO UNICODE
 }
 
 fn is_normal_quote_close(ch:char) -> bool { // TODO UNICODE
-	is_normal_quote_close(ch)
+	is_normal_quote_open(ch)
 }
 
 fn is_raw_quote_open(ch:char) -> bool { // TODO UNICODE
@@ -119,6 +123,22 @@ fn is_raw_quote_close(ch:char) -> bool { // TODO UNICODE
 
 fn is_word(ch:char) -> bool {
 	is_num(ch) || is_word_start(ch)
+}
+
+fn is_paren_open(ch:char) -> bool {
+	ch == '(' || ch == '[' || ch == '{'
+}
+
+fn is_paren_close(ch:char) -> bool {
+	ch == ')' || ch == ']' || ch == '}'
+}
+
+fn check_illegal(illegal:&HashSet<char>, at:&ReaderPosition, tag:&String, ch:char) -> Result<(), Error> {
+	let illegal = &*illegal_chars;
+	if illegal.contains(&ch) { // Illegal chars
+		return Err(Error {at:*at, tag:tag.clone(), message:format!("Illegal unicode char: U+{:x}", ch as u32)});
+	}
+	Ok(())
 }
 
 static illegal_chars:std::sync::LazyLock<HashSet<char>> = std::sync::LazyLock::new(generate_illegal_chars);
@@ -180,9 +200,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			if TRACE_DEBUG { eprintln!("\tState: {:?} Depth: {}", state.clone(), stack.len()); }
 			match state.clone() {
 			    ReadState::Scan(_) => { // "Normal"
-			    	if illegal.contains(&ch) { // Illegal chars
-			    		return Err(Error {at, tag, message:format!("Illegal unicode char: U+{:x}", ch as u32)});
-			    	}
+			    	check_illegal(illegal, &at, &tag, ch)?;
 
 			    	if is_whitespace(ch) {
 			    		break 'process;
@@ -233,7 +251,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	}
 
 			    	// Close parens
-			    	if ch == ')' || ch == ']' || ch == '}' {
+			    	if is_paren_close(ch) {
 			    		if stack.len() <= 1 {
 				    		return Err(Error {at, tag, message:format!("Unbalanced extra {} parenthesis", ch)});
 				    	} else {
@@ -244,7 +262,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	}
 
 			    	// Close parens
-			    	if ch == '(' || ch == '[' || ch == '{' {
+			    	if is_paren_open(ch) {
 			    		state = ReadState::Scan(false);
 
 			    		match ch {
@@ -310,30 +328,38 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 
 			    	continue 'process;
 			    }
-			    ReadState::Identifier => {
-			    	if is_whitespace(ch) {
-			    		// PUSH
+			    ReadState::Identifier | ReadState::Number => {
+			    	check_illegal(illegal, &at, &tag, ch)?;
+
+			    	let is_white = is_whitespace(ch);
+			    	if is_white || is_paren_close(ch) {
 			    		state = ReadState::Scan(false);
 			    		peel(&mut stack);
 
-			    		break 'process;
+			    		if is_white {
+			    			break 'process; // Tiny efficiency win
+			    		} else {
+			    			continue 'process;
+			    		}
 			    	}
 
-			    	let Some(AstNode {content:AstContent::String(ref mut s),..}) = stack.last_mut() else { die(); };
-			    	s.push(ch);
-			    },
-			    ReadState::Number => {
-			    	if is_whitespace(ch) {
-			    		state = ReadState::Scan(false);
-			    		peel(&mut stack);
+			    	if let ReadState::Identifier = state {
+				    	if is_paren_open(ch) || is_normal_quote_open(ch) || is_raw_quote_open(ch) {
+			    			return Err(Error {at, tag, message:format!("Illegal character for identifier: {}", ch)})  // TODO: Sanitize ch printout
+				    	}
 
-			    		break 'process;
+				    	let Some(AstNode {content:AstContent::String(ref mut s),..}) = stack.last_mut() else { die(); };
+				    	s.push(ch);
+			    	} else { // Number
+				    	if !is_num(ch) {
+				    		return Err(Error {at, tag, message:format!("Illegal character for number: {}", ch)})  // TODO: Sanitize ch printout
+				    	}
+
+				    	let Some(AstNode {content:AstContent::Int(ref mut i),..}) = stack.last_mut() else { die(); };
+				    	let i2 = parse_num(ch);
+				    	*i *= 10;
+				    	*i += if *i >= 0 { i2 } else { -i2 };
 			    	}
-
-			    	let Some(AstNode {content:AstContent::Int(ref mut i),..}) = stack.last_mut() else { die(); };
-			    	let i2 = parse_num(ch); 
-			    	*i *= 10;
-			    	*i += if *i >= 0 { i2 } else { -i2 };
 			    },
 			    ReadState::Quote(quote_state) => {
 			    	let closed = ||

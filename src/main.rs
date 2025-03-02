@@ -1,3 +1,5 @@
+//! Command line app
+
 use std::path::{Path, PathBuf};
 use std::io;
 use std::fs;
@@ -6,6 +8,7 @@ use char_reader::CharReader;
 
 const VERSION:&str = "0.1";
 
+mod memory;
 mod reader;
 mod util;
 

@@ -1,4 +1,4 @@
-// Turns unicode string iterator into parse tree
+//! Turns unicode string iterator into parse tree
 
 use std::borrow::BorrowMut;
 use std::collections::HashSet;

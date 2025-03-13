@@ -1,6 +1,7 @@
 //! Memory management / allocation / garbage collection
 
 use crate::reader::AstContent;
+use crate::eval;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 use std::collections::{HashMap, VecDeque};
@@ -11,15 +12,17 @@ type MemAddr = usize;
 
 type MemHandleTableCell<T> = RefCell<T>; // TODO: Unsafe form
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)] // TODO: Add display
 pub enum Primitive {
 	Nil,
 	True,
 	String(String),
 	Int(i64),
+	Builtin(eval::Builtin), // Cannot be constructed (FIXME: include name?)
 	//Float(f64)
 }
 
+#[derive(Debug)] // TODO: Add display.
 pub enum Value {
 	Primitive(Primitive),
 	Quote,
@@ -48,7 +51,7 @@ struct MemHandleTable {
 }
 
 #[derive(Clone)]
-struct MemHandleImpl {
+pub struct MemHandleImpl {
 	idx: usize,            // Index in table.handles
 
 	// Every handle implementation keeps a ref to the handle table
@@ -69,7 +72,7 @@ pub struct Memory {
 }
 
 impl Memory {
-	fn new_sized(starting_size:usize) -> Self {
+	pub fn new_sized(starting_size:usize) -> Self {
 		let mut space0:MemSpace = Vec::with_capacity(starting_size);;
 		space0.push(MemCell::Dict(Default::default()));
 		let mut handle_table = MemHandleTable::default();
@@ -89,7 +92,7 @@ impl Memory {
 		}
 	}
 
-	fn new() -> Self {
+	pub fn new() -> Self {
 		Self::new_sized(STARTING_SIZE)
 	}
 
@@ -119,6 +122,11 @@ impl Memory {
 			}
 		};
 		self.alloc_internal(data)
+	}
+
+	pub fn construct(&mut self, src: AstContent) -> MemHandle {
+		let addr = self.construct_internal(src);
+		self.handle_new(addr)
 	}
 
 	fn handle_new(&mut self, addr:MemAddr) -> MemHandle {
@@ -197,6 +205,13 @@ impl Memory {
 		*addr = addr2;
 	}
 
+	// Clone array or crash
+	pub fn array_as_handles(&mut self, handle: MemHandle) -> Vec<MemHandle> {
+		let cell = self.cell(handle);
+		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+		ary.clone().into_iter().map(|v| self.handle_new(v)).collect()
+	}
+
 	pub fn array_new(&mut self) -> MemHandle {
 		let addr = self.alloc_internal(MemCell::Array(Default::default()));
 		self.handle_new(addr)
@@ -241,7 +256,7 @@ impl Memory {
 		dict.insert(key, dst.idx);
 	}
 
-	pub fn dict_value(&mut self, handle:MemHandle, key:Primitive, value:Value) {
+	pub fn dict_set_value(&mut self, handle:MemHandle, key:Primitive, value:Value) {
 		let cell2 = self.value_to_cell_internal(value);
 		let addr2 = self.alloc_internal(cell2);
 		let cell = self.cell_mut(handle);

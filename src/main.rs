@@ -8,6 +8,8 @@ use char_reader::CharReader;
 
 const VERSION:&str = "0.1";
 
+mod eval;
+mod globals;
 mod memory;
 mod reader;
 mod util;
@@ -21,6 +23,8 @@ fn main() -> anyhow::Result<()> {
         version: bool,
         #[arg(long="debug-ast", help="(Internal debug) Show reader output")]
         debug_ast: bool,
+        #[arg(long="debug-mem-size", help="(Internal debug) Set initial GC space size")]
+        debug_mem_size: usize,
         filepath: Option<PathBuf>
     }
     let cli = Cli::parse();
@@ -33,13 +37,26 @@ fn main() -> anyhow::Result<()> {
     if let Some(filepath) = cli.filepath {
         let file = fs::File::open(filepath.clone());
         let mut chars = char_reader::CharReader::new(file?);
-        let v = reader::ast(chars, filepath.to_string_lossy().into_owned())?;
+        let v = crate::reader::ast(chars, filepath.to_string_lossy().into_owned())?;
 
         if cli.debug_ast {
             println!("{}", crate::util::ast_to_string(&v.source));
-        }
 
-        Ok(())
+            Ok(())
+        } else {
+            let mut memory = if cli.debug_mem_size > 0 {
+                crate::memory::Memory::new_sized(cli.debug_mem_size)
+            } else {
+                crate::memory::Memory::new()
+            };
+
+            crate::globals::populate(&mut memory);
+
+            let root = memory.construct(v.source.content);
+            let mut eval = crate::eval::Eval::new(memory, root);
+
+            eval.eval().map_err( |e| e.into() )
+        }
     } else {
         Err(io::Error::new(io::ErrorKind::InvalidInput, format!("No filename given")))?
     }

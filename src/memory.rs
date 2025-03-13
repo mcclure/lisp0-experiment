@@ -205,6 +205,11 @@ impl Memory {
 		*addr = addr2;
 	}
 
+	pub fn array_new(&mut self) -> MemHandle {
+		let addr = self.alloc_internal(MemCell::Array(Default::default()));
+		self.handle_new(addr)
+	}
+
 	// Clone array or crash
 	pub fn array_as_handles(&mut self, handle: MemHandle) -> Vec<MemHandle> {
 		let cell = self.cell(handle);
@@ -212,9 +217,16 @@ impl Memory {
 		ary.clone().into_iter().map(|v| self.handle_new(v)).collect()
 	}
 
-	pub fn array_new(&mut self) -> MemHandle {
-		let addr = self.alloc_internal(MemCell::Array(Default::default()));
-		self.handle_new(addr)
+	pub fn array_get(&mut self, handle:MemHandle, idx:usize) -> Option<MemHandle> {
+		let cell = self.cell_mut(handle);
+		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+
+		if idx < ary.len() {
+			let addr = ary[idx];
+			Some(self.handle_new(addr))
+		} else {
+			None
+		}
 	}
 
 	pub fn array_set(&mut self, handle:MemHandle, idx:usize, dst:MemHandle) {
@@ -248,6 +260,18 @@ impl Memory {
 	pub fn dict_new(&mut self) -> MemHandle {
 		let cell = self.alloc_internal(MemCell::Dict(Default::default()));
 		self.handle_new(cell)
+	}
+
+	// TODO: dict_size, dict_keys
+	pub fn dict_get(&mut self, handle:MemHandle, key:Primitive) -> Option<MemHandle> {
+		let cell = self.cell_mut(handle);
+		let MemCell::Dict(dict) = cell else { panic!("Expected dict") };
+		if dict.contains_key(&key) {
+			let addr = dict[&key];
+			Some(self.handle_new(addr))
+		} else {
+			None
+		}
 	}
 
 	pub fn dict_set(&mut self, handle:MemHandle, key:Primitive, dst:MemHandle) {

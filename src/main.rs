@@ -23,7 +23,7 @@ fn main() -> anyhow::Result<()> {
         version: bool,
         #[arg(long="debug-ast", help="(Internal debug) Show reader output")]
         debug_ast: bool,
-        #[arg(long="debug-mem-size", help="(Internal debug) Set initial GC space size")]
+        #[arg(long="debug-mem-size", help="(Internal debug) Set initial GC space size", default_value_t=0, hide_default_value=true)]
         debug_mem_size: usize,
         filepath: Option<PathBuf>
     }

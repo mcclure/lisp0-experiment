@@ -197,6 +197,12 @@ impl Memory {
 		self.handle_new(addr)
 	}
 
+	pub fn quote_get(&mut self, handle:MemHandle) -> MemHandle {
+		let cell = self.cell(handle);
+		let MemCell::Quote(addr) = cell else { panic!("Expected quote") };
+		self.handle_new(*addr)
+	}
+
 	pub fn quote_set(&mut self, handle:MemHandle, value:Value) {
 		let cell2 = self.value_to_cell_internal(value);
 		let addr2 = self.alloc_internal(cell2);
@@ -215,6 +221,12 @@ impl Memory {
 		let cell = self.cell(handle);
 		let MemCell::Array(ary) = cell else { panic!("Expected array") };
 		ary.clone().into_iter().map(|v| self.handle_new(v)).collect()
+	}
+
+	pub fn array_len(&mut self, handle:MemHandle) -> usize {
+		let cell = self.cell_mut(handle);
+		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+		ary.len()
 	}
 
 	pub fn array_get(&mut self, handle:MemHandle, idx:usize) -> Option<MemHandle> {

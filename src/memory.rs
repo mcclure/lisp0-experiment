@@ -156,6 +156,10 @@ impl Memory {
 	// 	*cell = cell2; // Does this work right with vec/hashmap?
 	// }
 
+	pub fn nil(&mut self) -> MemHandle {
+		self.value_new(Value::Primitive(Primitive::Nil))
+	}
+
 	pub fn value(&self, handle: MemHandle) -> Value {
 		match self.cell(handle) {
 			MemCell::Primitive(p) => Value::Primitive(p.clone()), // Is string clone a problem?

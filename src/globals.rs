@@ -12,17 +12,16 @@ fn insert(memory: &mut Memory, name:&str, primitive:Primitive) {
 }
 
 pub fn populate(memory: &mut Memory) {
-	insert(memory, "set", Primitive::Builtin(|eval, exec| {
-		let args = eval.memory.array_as_handles(exec);
-		if args.len() <= 3 {
+	insert(memory, "set", Primitive::Builtin(|eval, args| {
+		if args.len() <= 2 {
 			return Err(Error {message:"Too few args to `set`".to_string()});
 		}
 
-		match eval.memory.value(args[1].clone()) {
+		match eval.memory.value(args[0].clone()) {
 			// Set variable on scope.
 			Value::Primitive(v @ Primitive::String(_)) => { // FIXME: Quote, not string.
-				if args.len() == 3 {
-					eval.memory.dict_set(eval.memory.globals.clone(), v, args[2].clone());
+				if args.len() == 2 {
+					eval.memory.dict_set(eval.memory.globals.clone(), v, args[1].clone());
 					Ok(None)
 				} else {
 					Err(Error {message:"Too many args to `set`".to_string()})
@@ -33,15 +32,14 @@ pub fn populate(memory: &mut Memory) {
 		}
 	}));
 
-	insert(memory, "get", Primitive::Builtin(|eval, exec| {
-		let args = eval.memory.array_as_handles(exec);
-		if args.len() <= 2 {
+	insert(memory, "get", Primitive::Builtin(|eval, args| {
+		if args.len() <= 1 {
 			return Err(Error {message:"Too few args to `set`".to_string()});
 		}
-		match eval.memory.value(args[1].clone()) {
+		match eval.memory.value(args[0].clone()) {
 			// Get variable from scope.
 			Value::Primitive(v @ Primitive::String(_)) => { // FIXME: Quote, not string.
-				if args.len() == 2 {
+				if args.len() == 1 {
 					eval.memory.dict_get(eval.memory.globals.clone(), v);
 					Ok(None)
 				} else {
@@ -53,15 +51,9 @@ pub fn populate(memory: &mut Memory) {
 		}
 	}));
 
-	insert(memory, "print", Primitive::Builtin(|eval, exec| {
-		let args = eval.memory.array_as_handles(exec);
-		let mut first = true;
+	insert(memory, "print", Primitive::Builtin(|eval, args| {
 		for arg in args {
-			if first {
-				first = false;
-			} else {
-				print!("{:?}", eval.memory.value(arg))
-			}
+			print!("{:?}", eval.memory.value(arg.clone())); // TODO: "Consume" input
 		}
 		Ok(None)
 	}));

@@ -1,4 +1,6 @@
 //! Memory management / allocation / garbage collection
+// TODO: GC
+// TODO: Drop handler on handles
 
 use crate::reader::AstContent;
 use crate::eval;
@@ -66,7 +68,6 @@ pub type MemHandle = Rc<MemHandleImpl>;
 pub struct Memory {
 	spaces: [MemSpace;2], // Current space, space to collect into
 	space_parity:bool,    // Use as index to "spaces" for current space
-	space_top:usize,      // Allocate from this index
 	handle_table:Rc<MemHandleTableCell<MemHandleTable>>, // Dispense handles from here
 	pub globals: MemHandle    // "Root"
 }
@@ -86,7 +87,6 @@ impl Memory {
 				Vec::with_capacity(0)
 			],
 			space_parity:false,
-			space_top:0,
 			handle_table,
 			globals
 		}
@@ -96,13 +96,16 @@ impl Memory {
 		Self::new_sized(STARTING_SIZE)
 	}
 
+	fn space_top(&self) -> usize {
+		self.spaces[self.space_parity as usize].len()
+	}
+
 	fn alloc_internal(&mut self, data: MemCell) -> MemAddr {
-		if self.space_top >= self.spaces[self.space_parity as usize].capacity() {
-			panic!("Not ready to garbage collect");
+		if self.space_top() >= self.spaces[self.space_parity as usize].capacity() {
+			panic!("Code can't garbage collect yet");
 		}
-		let top = self.space_top;
+		let top = self.space_top();
 		self.spaces[self.space_parity as usize].push(data);
-		self.space_top += 1;
 		top
 	}
 
@@ -130,24 +133,31 @@ impl Memory {
 	}
 
 	fn handle_new(&mut self, addr:MemAddr) -> MemHandle {
-		let value = Some(addr);
+		let handle_value = Some(addr);
 		let mut handle_table = self.handle_table.borrow_mut();
 		let idx = if handle_table.free.len() > 0 {
 			let idx = handle_table.free.pop_front().unwrap();
-			handle_table.handles[idx as usize] = value;
+			handle_table.handles[idx as usize] = handle_value;
 			idx
 		} else {
 			let idx = handle_table.handles.len();
-			handle_table.handles.push(value);
+			handle_table.handles.push(handle_value);
 			idx
 		};
-		Rc::new(MemHandleImpl { idx, parent:Rc::downgrade(&self.handle_table) })
+		let r = Rc::new(MemHandleImpl { idx, parent:Rc::downgrade(&self.handle_table) });
+		r
 	}
 
 	fn space(&self) -> &MemSpace { &self.spaces[self.space_parity as usize] }
 	fn space_mut(&mut self) -> &mut MemSpace { &mut self.spaces[self.space_parity as usize] }
-	fn cell(&self, handle: MemHandle) -> &MemCell { &self.space()[handle.idx] }
-	fn cell_mut(&mut self, handle: MemHandle) -> &mut MemCell { &mut self.space_mut()[handle.idx] }
+	fn cell(&self, handle: MemHandle) -> &MemCell {
+		let addr = self.handle_table.borrow().handles[handle.idx].unwrap(); // FIXME: Use unchecked?
+		&self.space()[addr]
+	}
+	fn cell_mut(&mut self, handle: MemHandle) -> &mut MemCell {
+		let addr = self.handle_table.borrow().handles[handle.idx].unwrap();
+		&mut self.space_mut()[addr]
+	}
 
 	// Why would this be useful?
 	// pub fn set_copy(&mut self, dst:MemHandle, set:MemHandle) {

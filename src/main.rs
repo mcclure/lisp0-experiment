@@ -55,7 +55,7 @@ fn main() -> anyhow::Result<()> {
             let root = memory.construct(v.source.content);
             let mut eval = crate::eval::Eval::new(memory, root);
 
-            eval.eval().map_err( |e| e.into() )
+            Ok(eval.eval()?)
         }
     } else {
         Err(io::Error::new(io::ErrorKind::InvalidInput, format!("No filename given")))?

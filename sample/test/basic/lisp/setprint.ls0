@@ -4,4 +4,4 @@
 (set 'y x)
 (set 'x 5)
 
-(print 3 sp y sp x sp "six" sp MAX_INT ln)
+(print 3 sp y sp x sp "six" sp INT_MAX ln)

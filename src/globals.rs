@@ -13,7 +13,7 @@ fn insert(memory: &mut Memory, name:&str, primitive:Primitive) {
 
 pub fn populate(memory: &mut Memory) {
 	insert(memory, "set", Primitive::Builtin(|eval, args| {
-		if args.len() <= 2 {
+		if args.len() < 2 {
 			return Err(Error {message:"Too few args to `set`".to_string()});
 		}
 
@@ -33,7 +33,7 @@ pub fn populate(memory: &mut Memory) {
 	}));
 
 	insert(memory, "get", Primitive::Builtin(|eval, args| {
-		if args.len() <= 1 {
+		if args.len() < 1 {
 			return Err(Error {message:"Too few args to `set`".to_string()});
 		}
 		match eval.memory.value(args[0].clone()) {

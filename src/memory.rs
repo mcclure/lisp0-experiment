@@ -7,6 +7,7 @@ use crate::eval;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 use std::collections::{HashMap, VecDeque};
+use std::fmt;
 
 const STARTING_SIZE:usize = 1024*1024;
 
@@ -24,6 +25,23 @@ pub enum Primitive {
 	//Float(f64)
 }
 
+impl fmt::Display for Primitive {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Write strictly the first element into the supplied output
+        // stream: `f`. Returns `fmt::Result` which indicates whether the
+        // operation succeeded or failed. Note that `write!` uses syntax which
+        // is very similar to `println!`.
+        match self {
+            Primitive::Nil =>  write!(f, "[nil]"),
+            Primitive::True => write!(f, "[true]"),
+            Primitive::String(s) => write!(f, "{s}"),
+            Primitive::Int(i) => write!(f, "{i}"),
+            Primitive::Builtin(_) => write!(f, "[builtin]")
+        }
+    }
+}
+
 #[derive(Debug)] // TODO: Add display.
 pub enum Value {
 	Primitive(Primitive),
@@ -32,6 +50,21 @@ pub enum Value {
 	Dict
 }
 
+impl fmt::Display for Value {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Write strictly the first element into the supplied output
+        // stream: `f`. Returns `fmt::Result` which indicates whether the
+        // operation succeeded or failed. Note that `write!` uses syntax which
+        // is very similar to `println!`.
+        match self {
+            Value::Primitive(p) =>  write!(f, "{p}"),
+            Value::Quote => write!(f, "[quote]"),
+            Value::Array => write!(f, "[array]"), // TODO: size would be nice.
+            Value::Dict => write!(f, "[dict]"),
+        }
+    }
+}
 // TODO: Non-fixed size representation (might require unsafe?)
 // TODO: Store vectors within MemSpaces
 // TODO: Segregate spaces by type / type in pointer

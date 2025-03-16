@@ -53,7 +53,7 @@ pub fn populate(memory: &mut Memory) {
 
 	insert(memory, "print", Primitive::Builtin(|eval, args| {
 		for arg in args {
-			print!("{:?}", eval.memory.value(arg.clone())); // TODO: "Consume" input
+			print!("{}", eval.memory.value(arg.clone())); // TODO: "Consume" input
 		}
 		Ok(None)
 	}));

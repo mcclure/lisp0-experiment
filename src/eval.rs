@@ -54,7 +54,7 @@ impl Eval {
 
 				// We need to turn the line of "code" into a line of runtime values.
 				'prepare: loop {
-					if line_len <= prepare.len() { break 'prepare StackNext::Execute(*line_num >= fun_len) } // Loop done
+					if line_len <= prepare.len() { break 'prepare StackNext::Execute(*line_num >= fun_len-1) } // Loop done
 
 					let item = self.memory.array_get(line.clone(), prepare.len()).expect("Interpreter internal error");
 					let next = match self.memory.value(item.clone()) {

@@ -181,14 +181,18 @@ impl Memory {
 		r
 	}
 
+	fn handle_to_addr(&self, handle:MemHandle) -> MemAddr {
+		self.handle_table.borrow().handles[handle.idx].unwrap() // FIXME: Use unchecked?
+	}
+
 	fn space(&self) -> &MemSpace { &self.spaces[self.space_parity as usize] }
 	fn space_mut(&mut self) -> &mut MemSpace { &mut self.spaces[self.space_parity as usize] }
 	fn cell(&self, handle: MemHandle) -> &MemCell {
-		let addr = self.handle_table.borrow().handles[handle.idx].unwrap(); // FIXME: Use unchecked?
+		let addr = self.handle_to_addr(handle);
 		&self.space()[addr]
 	}
 	fn cell_mut(&mut self, handle: MemHandle) -> &mut MemCell {
-		let addr = self.handle_table.borrow().handles[handle.idx].unwrap();
+		let addr = self.handle_to_addr(handle);
 		&mut self.space_mut()[addr]
 	}
 
@@ -289,15 +293,17 @@ impl Memory {
 	}
 
 	pub fn array_set(&mut self, handle:MemHandle, idx:usize, dst:MemHandle) {
+		let addr = self.handle_to_addr(dst);
 		let cell = self.cell_mut(handle);
 		let MemCell::Array(ary) = cell else { panic!("Expected array") };
-		ary[idx] = dst.idx;
+		ary[idx] = addr;
 	}
 
 	pub fn array_push(&mut self, handle:MemHandle, idx:usize, dst:MemHandle) {
+		let addr = self.handle_to_addr(dst);
 		let cell = self.cell_mut(handle);
 		let MemCell::Array(ary) = cell else { panic!("Expected array") };
-		ary.push(dst.idx);
+		ary.push( addr );
 	}
 
 	pub fn array_set_value(&mut self, handle:MemHandle, idx:usize, value:Value) {
@@ -334,9 +340,10 @@ impl Memory {
 	}
 
 	pub fn dict_set(&mut self, handle:MemHandle, key:Primitive, dst:MemHandle) {
+		let addr = self.handle_to_addr(dst);
 		let cell = self.cell_mut(handle);
 		let MemCell::Dict(dict) = cell else { panic!("Expected dict") };
-		dict.insert(key, dst.idx);
+		dict.insert(key, addr);
 	}
 
 	pub fn dict_set_value(&mut self, handle:MemHandle, key:Primitive, value:Value) {

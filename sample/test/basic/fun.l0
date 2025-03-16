@@ -1,0 +1,16 @@
+# Check if functions are being called (no args)
+# Expect: 1 2
+# Expect: 3 4
+
+set 'do-print {
+	set 'z x
+	print z y
+}
+
+set 'x 1
+set 'y 2
+do-print
+
+set 'x 3
+set 'y 4
+do-print

@@ -12,6 +12,8 @@ fn insert(memory: &mut Memory, name:&str, primitive:Primitive) {
 }
 
 pub fn populate(memory: &mut Memory) {
+	// --- Core ---
+
 	insert(memory, "set", Primitive::Builtin(|eval, args| {
 		if args.len() < 2 {
 			return Err(Error {message:"Too few args to `set`".to_string()});
@@ -57,6 +59,48 @@ pub fn populate(memory: &mut Memory) {
 		}
 		Ok(None)
 	}));
+
+	// --- Math ---
+
+	// + rules: Strings can be added to strings and numbers, but nothing else
+	//          Ints can only be added to other ints
+	//          TODO: Arrays can be added to arrays, dicts can be added to dicts...?
+	insert(memory, "+", Primitive::Builtin(|eval, args| {
+		if args.len() < 2 {
+			return Err(Error {message:"Too few args to `+`".to_string()});
+		}
+		match eval.memory.value(args[0].clone()) {
+			// Get variable from scope.
+			Value::Primitive(Primitive::String(s)) => { // FIXME: Quote, not string.
+				let mut s = s;
+				for idx in 1..args.len() {
+					match eval.memory.value(args[idx].clone()) {
+						Value::Primitive(Primitive::String(s2)) =>
+							s = s + &s2,
+						Value::Primitive(Primitive::Int(i2)) =>
+							s = format!("{s}{i2}"),
+						v @ _ => return Err(Error {message:format!("Argument {idx} to `+` is not a string or number: {:?}", v)})
+					}
+				}
+				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::String(s)))))
+			}
+			Value::Primitive(Primitive::Int(i)) => { // FIXME: Quote, not string.
+				let mut i = i;
+				for idx in 1..args.len() {
+					match eval.memory.value(args[idx].clone()) {
+						Value::Primitive(Primitive::Int(i2)) =>
+							i = i + i2,
+						v @ _ => return Err(Error {message:format!("Argument {idx} to `+` is not a number: {:?}", v)})
+					}
+				}
+				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(i)))))
+			}
+			// TODO: Value::Dict, Value::Array, local
+			v @ _ => Err(Error {message:format!("First argument to `set` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		}
+	}));
+
+	// --- Constants ---
 
 	insert(memory, "sp", Primitive::String(" ".to_string()));
 	insert(memory, "ln", Primitive::String("\n".to_string()));

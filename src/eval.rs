@@ -21,7 +21,7 @@ impl std::error::Error for Error {}
 
 pub struct Eval {
 	pub memory: Memory,
-	stack: Vec<(bool, MemHandle, usize, Vec<MemHandle>)> // want-return?, function, linenum-at, line-in-progress
+	stack: Vec<(bool, MemHandle, Option<usize>, Vec<MemHandle>)> // want-return?, function, linenum-at, line-in-progress
 }
 
 enum PrepareNext {
@@ -37,7 +37,7 @@ impl Eval {
 	pub fn new(memory: Memory, root: MemHandle) -> Self {
 		Self {
 			memory,
-			stack: vec![(false, root, 0, Default::default())]
+			stack: vec![(false, root, Some(0), Default::default())]
 		}
 	}
 
@@ -50,12 +50,20 @@ impl Eval {
 				if fun_len == 0 { return Err(Error {message:format!("Executing empty function")}) } // Isn't doing this every time slow :/
 
 				// Now unpack the current line within that function
-				let line = self.memory.array_get(fun.clone(), *line_num).expect("Interpreter internal error");
-				let line_len = self.memory.array_len(line.clone());
+				let (line, line_len) = if let Some(line_num) = line_num {
+					let line = self.memory.array_get(fun.clone(), *line_num).expect("Interpreter internal error");
+					(line.clone(), self.memory.array_len(line))
+				} else {
+					(fun.clone(), self.memory.array_len(fun.clone()))
+				};
 
 				// We need to turn the line of "code" into a line of runtime values.
 				'prepare: loop {
-					if line_len <= prepare.len() { break 'prepare StackNext::Execute(*line_num >= fun_len-1) } // Loop done
+					if line_len <= prepare.len() {
+						break 'prepare StackNext::Execute(
+							if let Some(line_num) = line_num { *line_num >= fun_len-1 } else { true } // Loop done
+						)
+					}
 
 					let item = self.memory.array_get(line.clone(), prepare.len()).expect("Interpreter internal error");
 					let next = match self.memory.value(item.clone()) {
@@ -109,7 +117,7 @@ impl Eval {
 			    	let (want_return,fun,line_num,prepare) = self.stack.pop().unwrap(); // Consider making unwrap unsafe
 			    	let mut returned:Option<MemHandle> = None;
 			    	if !returning { // More lines to execute in this function. Should not have popped
-			    		self.stack.push((want_return,fun,line_num+1,Default::default()));
+			    		self.stack.push((want_return,fun,Some(line_num.unwrap()+1),Default::default())); // unwrap known safe
 			    	}
 			    	let returning = returning && want_return;
 			    	if prepare.len() == 0 { // Allow empty lines?? I guess a convenience for builders
@@ -131,7 +139,7 @@ impl Eval {
 				            	}
 				            },
 							Value::Array => {
-								self.stack.push((returning,car.clone(),0,Default::default()));
+								self.stack.push((returning,car.clone(),Some(0),Default::default()));
 							},
 							v @ _ => {
 				            	return Err(Error {message:format!("Tried to execute non-function: {:?}", v)}) // TODO display
@@ -145,7 +153,7 @@ impl Eval {
 			    	}
 			    }
 			    StackNext::Push(handle) => {
-			    	self.stack.push((true, handle, 0, Default::default()));
+			    	self.stack.push((true, handle, None, Default::default()));
 			    }
 			}
 		}

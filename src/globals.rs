@@ -21,7 +21,7 @@ pub fn populate(memory: &mut Memory) {
 
 		match eval.memory.value(args[0].clone()) {
 			// Set variable on scope.
-			Value::Primitive(v @ Primitive::String(_)) => { // FIXME: Quote, not string.
+			Value::Primitive(v @ Primitive::String(_)) => {
 				if args.len() == 2 {
 					eval.memory.dict_set(eval.memory.globals.clone(), v, args[1].clone());
 					Ok(None)
@@ -40,7 +40,7 @@ pub fn populate(memory: &mut Memory) {
 		}
 		match eval.memory.value(args[0].clone()) {
 			// Get variable from scope.
-			Value::Primitive(v @ Primitive::String(_)) => { // FIXME: Quote, not string.
+			Value::Primitive(v @ Primitive::String(_)) => {
 				if args.len() == 1 {
 					eval.memory.dict_get(eval.memory.globals.clone(), v);
 					Ok(None)
@@ -96,9 +96,37 @@ pub fn populate(memory: &mut Memory) {
 				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(i)))))
 			}
 			// TODO: Value::Dict, Value::Array, local
-			v @ _ => Err(Error {message:format!("First argument to `set` unrecognized: {:?}", v)}) // TODO: Display not Debug
+			v @ _ => Err(Error {message:format!("First argument to `+` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		}
 	}));
+
+	fn insertBinaryMath(memory: &mut Memory, name:&str, f:fn(i64, i64)->i64) {
+		let name2 = name.clone();
+		insert(memory, name2, Primitive::Builtin(|eval, args| {
+			if args.len() < 2 {
+				return Err(Error {message:format!("Too few args to `{name}`")});
+			}
+			match eval.memory.value(args[0].clone()) {
+				Value::Primitive(Primitive::Int(i)) => {
+					let mut i = i;
+					for idx in 1..args.len() {
+						match eval.memory.value(args[idx].clone()) {
+							Value::Primitive(Primitive::Int(i2)) =>
+								i = i + i2,
+							v @ _ => return Err(Error {message:format!("Argument {idx} to {name} is not a number: {:?}", v)})
+						}
+					}
+					Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(i)))))
+				}
+				// TODO: Value::Dict, Value::Array, local
+				v @ _ => Err(Error {message:format!("First argument to `{name}` unrecognized: {:?}", v)}) // TODO: Display not Debug
+			}
+		}));
+	}
+
+	insertBinaryMath(memory, "-", |x,y| x-y);
+	insertBinaryMath(memory, "*", |x,y| x-y);
+	insertBinaryMath(memory, "/", |x,y| x-y);
 
 	// --- Constants ---
 

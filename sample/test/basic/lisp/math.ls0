@@ -1,3 +1,6 @@
 # Expect: 6 7 38
+# Expect: 6
 
 (print 6 sp (+ 1 6) sp (+ (+ 2 (+ 1 5)) (+ 10 20)) ln)
+
+(print (* (- 7 4 1) (+ 1 (/ 16 4 2))) ln) # Reduces to (* 2 3)

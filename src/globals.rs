@@ -100,33 +100,37 @@ pub fn populate(memory: &mut Memory) {
 		}
 	}));
 
-	fn insertBinaryMath(memory: &mut Memory, name:&str, f:fn(i64, i64)->i64) {
-		let name2 = name.clone();
-		insert(memory, name2, Primitive::Builtin(|eval, args| {
-			if args.len() < 2 {
-				return Err(Error {message:format!("Too few args to `{name}`")});
-			}
-			match eval.memory.value(args[0].clone()) {
-				Value::Primitive(Primitive::Int(i)) => {
-					let mut i = i;
-					for idx in 1..args.len() {
-						match eval.memory.value(args[idx].clone()) {
-							Value::Primitive(Primitive::Int(i2)) =>
-								i = i + i2,
-							v @ _ => return Err(Error {message:format!("Argument {idx} to {name} is not a number: {:?}", v)})
-						}
-					}
-					Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(i)))))
+	// -, *, and / are remarkably similar. Construct with a macro instead of closure operations
+	// so that we can get an fn() and not a Closure.
+	macro_rules! insert_binary_math {
+		($name:expr, $op:expr) => {
+			insert(memory, $name, Primitive::Builtin(|eval, args| {
+				if args.len() < 2 {
+					return Err(Error {message:format!("Too few args to `{}`", $name)});
 				}
-				// TODO: Value::Dict, Value::Array, local
-				v @ _ => Err(Error {message:format!("First argument to `{name}` unrecognized: {:?}", v)}) // TODO: Display not Debug
-			}
-		}));
+				let op = $op;
+				match eval.memory.value(args[0].clone()) {
+					Value::Primitive(Primitive::Int(i)) => {
+						let mut i = i;
+						for idx in 1..args.len() {
+							match eval.memory.value(args[idx].clone()) {
+								Value::Primitive(Primitive::Int(i2)) =>
+									i = op(i, i2),
+								v @ _ => return Err(Error {message:format!("Argument {idx} to {} is not a number: {:?}", $name, v)})
+							}
+						}
+						Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(i)))))
+					}
+					// TODO: Value::Dict, Value::Array, local
+					v @ _ => Err(Error {message:format!("First argument to `{}` unrecognized: {:?}", $name, v)}) // TODO: Display not Debug
+				}
+			}));
+		}
 	}
 
-	insertBinaryMath(memory, "-", |x,y| x-y);
-	insertBinaryMath(memory, "*", |x,y| x-y);
-	insertBinaryMath(memory, "/", |x,y| x-y);
+	insert_binary_math!("-", |x,y| x-y);
+	insert_binary_math!("*", |x,y| x*y);
+	insert_binary_math!("/", |x,y| x/y);
 
 	// --- Constants ---
 

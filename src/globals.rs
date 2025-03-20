@@ -71,7 +71,7 @@ pub fn populate(memory: &mut Memory) {
 		}
 		match eval.memory.value(args[0].clone()) {
 			// Get variable from scope.
-			Value::Primitive(Primitive::String(s)) => { // FIXME: Quote, not string.
+			Value::Primitive(Primitive::String(s)) => {
 				let mut s = s;
 				for idx in 1..args.len() {
 					match eval.memory.value(args[idx].clone()) {
@@ -84,7 +84,7 @@ pub fn populate(memory: &mut Memory) {
 				}
 				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::String(s)))))
 			}
-			Value::Primitive(Primitive::Int(i)) => { // FIXME: Quote, not string.
+			Value::Primitive(Primitive::Int(i)) => {
 				let mut i = i;
 				for idx in 1..args.len() {
 					match eval.memory.value(args[idx].clone()) {
@@ -131,6 +131,20 @@ pub fn populate(memory: &mut Memory) {
 	insert_binary_math!("-", |x,y| x-y);
 	insert_binary_math!("*", |x,y| x*y);
 	insert_binary_math!("/", |x,y| x/y);
+
+	// FIXME: Is it weird to allow (/ 1 2 3) but not (% 1 2 3) ?
+	insert(memory, "%", Primitive::Builtin(|eval, args| {
+		if args.len() != 2 {
+			return Err(Error {message:"`%` expects exactly 2 arguments".to_string()});
+		}
+		match (eval.memory.value(args[0].clone()), eval.memory.value(args[1].clone())) {
+			(Value::Primitive(Primitive::Int(i)), Value::Primitive(Primitive::Int(i2))) => {
+				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(i%i2)))))
+			}
+			// TODO: Value::Dict, Value::Array, local
+			v @ _ => Err(Error {message:format!("First argument to `+` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		}
+	}));
 
 	// --- Constants ---
 

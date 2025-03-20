@@ -131,6 +131,9 @@ pub fn populate(memory: &mut Memory) {
 	insert_binary_math!("-", |x,y| x-y);
 	insert_binary_math!("*", |x,y| x*y);
 	insert_binary_math!("/", |x,y| x/y);
+	insert_binary_math!("&", |x,y| x&y);
+	insert_binary_math!("|", |x,y| x|y);
+	insert_binary_math!("^", |x,y| x^y);
 
 	// FIXME: Is it weird to allow (/ 1 2 3) but not (% 1 2 3) ?
 	insert(memory, "%", Primitive::Builtin(|eval, args| {
@@ -144,6 +147,53 @@ pub fn populate(memory: &mut Memory) {
 			// TODO: Value::Dict, Value::Array, local
 			v @ _ => Err(Error {message:format!("First argument to `+` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		}
+	}));
+
+	fn value_to_bool(v:Value) -> bool {
+		match v {
+			Value::Primitive(Primitive::Nil) => false,
+			_ => true
+		}
+	}
+	fn bool_to_handle(memory:&mut Memory, b:bool) -> Result<Option<MemHandle>, Error> {
+		Ok(Some(memory.value_new(if b {
+			Value::Primitive(Primitive::True)
+		} else {
+			Value::Primitive(Primitive::Nil)
+		})))
+	}
+
+	// &&, || and ^^ are remarkably similar.
+	macro_rules! insert_binary_logic {
+		($name:expr, $op:expr, $short:expr) => { // Third is a fn that returns true if it's time to short circuit
+			insert(memory, $name, Primitive::Builtin(|eval, args| {
+				if args.len() < 2 {
+					return Err(Error {message:format!("Too few args to `{}`", $name)});
+				}
+				let op = $op;
+				let short_circuit = $short;
+
+				let mut b = value_to_bool(eval.memory.value(args[0].clone()));
+				'iter: for idx in 1..args.len() {
+					let b2 = value_to_bool(eval.memory.value(args[idx].clone()));
+					b = op(b, b2);
+					if short_circuit(b) { break 'iter; }
+				}
+				bool_to_handle(&mut eval.memory, b)
+			}));
+		}
+	}
+
+	insert_binary_logic!("||", |x,y| x || y, |x:bool| x);  // Short circuit if true
+	insert_binary_logic!("&&", |x,y| x && y, |x:bool| !x); // Short circuit if false
+	insert_binary_logic!("^^", |x,y| x == y, |_| false); // Don't short circuit
+
+	insert(memory, "!", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:"`!` expects exactly 1 argument".to_string()});
+		}
+		let b = !value_to_bool(eval.memory.value(args[0].clone()));
+		bool_to_handle(&mut eval.memory, b)
 	}));
 
 	// --- Constants ---

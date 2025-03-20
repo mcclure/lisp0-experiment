@@ -1,0 +1,3 @@
+# Expect failure
+
+return 1 2

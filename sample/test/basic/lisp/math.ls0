@@ -2,10 +2,10 @@
 # Expect: 6
 # Expect: 1
 # Expect: -5 11 7
-# Expect: nil true nil nil true
-# Expect: true nil nil true nil true
-# Expect: 3 nil
-# Expect: true true nil
+# Expect: [nil] [true] [nil] [nil] [true]
+# Expect: [true] [nil] [nil] [true] [nil] [true]
+# Expect: 3 [nil]
+# Expect: [true] [true] [nil]
 # Expect: trip-a trip-b
 
 # ARITHMETIC

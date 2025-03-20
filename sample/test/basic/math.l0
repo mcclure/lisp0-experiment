@@ -1,4 +1,8 @@
-# Expect: 6 7
+# Expect: 6 7 38
+# Expect: 6
+# Expect: 1
+
+# Note: This is highly abbreviated compared to math.ls0
 
 print 6 sp (+ 1 6) sp (+ (+ 2 (+ 1 5)) (+ 10 20)) ln
 

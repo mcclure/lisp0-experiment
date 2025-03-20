@@ -145,7 +145,34 @@ pub fn populate(memory: &mut Memory) {
 				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(i%i2)))))
 			}
 			// TODO: Value::Dict, Value::Array, local
-			v @ _ => Err(Error {message:format!("First argument to `+` unrecognized: {:?}", v)}) // TODO: Display not Debug
+			v @ _ => Err(Error {message:format!("First argument to `%` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		}
+	}));
+
+	insert(memory, "~", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:"`neg` expects exactly 1 argument".to_string()});
+		}
+		match eval.memory.value(args[0].clone()) {
+			Value::Primitive(Primitive::Int(i)) => {
+				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(!i)))))
+			}
+			// TODO: Value::Dict, Value::Array, local
+			v @ _ => Err(Error {message:format!("Argument to integer `~` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		}
+	}));
+
+	// Don't collapse with ~ because this will diverge once floats exist.
+	insert(memory, "neg", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:"`neg` expects exactly 1 argument".to_string()});
+		}
+		match eval.memory.value(args[0].clone()) {
+			Value::Primitive(Primitive::Int(i)) => {
+				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(-i)))))
+			}
+			// TODO: Value::Dict, Value::Array, local
+			v @ _ => Err(Error {message:format!("Argument to numeric `neg` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		}
 	}));
 
@@ -171,7 +198,7 @@ pub fn populate(memory: &mut Memory) {
 					return Err(Error {message:format!("Too few args to `{}`", $name)});
 				}
 				let op = $op;
-				let short_circuit = $short;
+				let short_circuit = $short; // Is this optimization meaningless?
 
 				let mut b = value_to_bool(eval.memory.value(args[0].clone()));
 				'iter: for idx in 1..args.len() {
@@ -186,7 +213,7 @@ pub fn populate(memory: &mut Memory) {
 
 	insert_binary_logic!("||", |x,y| x || y, |x:bool| x);  // Short circuit if true
 	insert_binary_logic!("&&", |x,y| x && y, |x:bool| !x); // Short circuit if false
-	insert_binary_logic!("^^", |x,y| x == y, |_| false); // Don't short circuit
+	insert_binary_logic!("^^", |x,y| x != y, |_| false); // Don't short circuit
 
 	insert(memory, "!", Primitive::Builtin(|eval, args| {
 		if args.len() != 1 {
@@ -196,7 +223,25 @@ pub fn populate(memory: &mut Memory) {
 		bool_to_handle(&mut eval.memory, b)
 	}));
 
+	// --- Oddballs ---
+
+	// Takes any number of arguments, returns nil.
+	insert(memory, "discard", Primitive::Builtin(|_, _| {
+		Ok(None)
+	}));
+
+	// Identity combinator: Takes one argument, returns it.
+	insert(memory, "return", Primitive::Builtin(|_, args| {
+		if args.len() != 1 {
+			return Err(Error {message:"`return` expects exactly 1 argument".to_string()});
+		}
+		Ok(Some(args[0].clone()))
+	}));
+
 	// --- Constants ---
+
+	insert(memory, "nil", Primitive::Nil);
+	insert(memory, "true", Primitive::True);
 
 	insert(memory, "sp", Primitive::String(" ".to_string()));
 	insert(memory, "ln", Primitive::String("\n".to_string()));

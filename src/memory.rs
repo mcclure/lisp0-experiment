@@ -267,6 +267,14 @@ impl Memory {
 		self.handle_new(addr)
 	}
 
+	pub fn array_from_handles(&mut self, handles: &[MemHandle]) -> MemHandle {
+		let addr = self.alloc_internal(MemCell::Primitive(Primitive::Nil)); // Is this suboptimal?
+		let cell2 = MemCell::Array(handles.iter().map(|handle|self.handle_to_addr(handle.clone())).collect());
+		let cell = &mut self.space_mut()[addr];
+		*cell = cell2;
+		self.handle_new(addr)
+	}
+
 	// Clone array or crash
 	pub fn array_as_handles(&mut self, handle: MemHandle) -> Vec<MemHandle> {
 		let cell = self.cell(handle);

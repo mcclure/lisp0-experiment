@@ -285,4 +285,7 @@ pub fn populate(memory: &mut Memory) {
 	// FIXME: Spelling/capitalization
 	insert(memory, "INT_MIN", Primitive::Int(std::i64::MIN));
 	insert(memory, "INT_MAX", Primitive::Int(std::i64::MAX));
+
+	// TODO: Either don't do this, or make a specific decision to overwrite it with real args
+	insert(memory, "args", Primitive::Nil);
 }

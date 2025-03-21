@@ -21,7 +21,7 @@ impl std::error::Error for Error {}
 
 pub struct Eval {
 	pub memory: Memory,
-	stack: Vec<(bool, MemHandle, Option<usize>, Vec<MemHandle>)> // want-return?, function, linenum-at, line-in-progress
+	stack: Vec<(bool, Option<MemHandle>, MemHandle, Option<usize>, Vec<MemHandle>)> // want-return?, restore-arg-on-return, function, linenum-at, line-in-progress
 }
 
 enum PrepareNext {
@@ -37,14 +37,20 @@ impl Eval {
 	pub fn new(memory: Memory, root: MemHandle) -> Self {
 		Self {
 			memory,
-			stack: vec![(false, root, Some(0), Default::default())]
+			stack: vec![(false, None, root, Some(0), Default::default())]
 		}
 	}
 
 	pub fn eval(&mut self) -> Result<(), Error> {
+		macro_rules! args_str { // We need this string like three places below, I don't want to keep retyping it
+			() => {
+				Primitive::String("args".to_string());
+			}
+		}
+
 		// stack will grow and shrink freely as program runs; when the stack's empty we're done.
 		'eval: loop {
-			let next = if let Some((_, fun, line_num, prepare)) = self.stack.last_mut() {
+			let next = if let Some((_, _, fun, line_num, prepare)) = self.stack.last_mut() {
 				// First work out what function we're running
 				let fun_len = self.memory.array_len(fun.clone()); // Used only in multiline functions
 
@@ -121,18 +127,26 @@ impl Eval {
 			match next {
 				// Prepare loop isn't done and wants an individual (call) evaluated.
 			    StackNext::Push(handle) => {
-			    	self.stack.push((true, handle, None, Default::default()));
+			    	self.stack.push((true, None, handle, None, Default::default()));
 			    }
 
 			    // Prepare loop is done and now we should execute the line we've prepared.
 			    StackNext::Execute(returning) => {
 			    	// Peel a layer off the stack (we might push the first three values back later but prepare we'll consume)
-			    	let (want_return,fun,line_num,prepare) = self.stack.pop().unwrap(); // Consider making unwrap unsafe
+			    	let (want_return,args_restore,fun,line_num,prepare) = self.stack.pop().unwrap(); // Consider making unwrap unsafe
 			    	let mut returned:Option<MemHandle> = None; // Will only be populated if returning
-			    	if !returning { // More lines to execute in this function! Should not have popped
-			    		self.stack.push((want_return,fun,Some(line_num.unwrap()+1),Default::default())); // unwrap known safe, could be unchecked
-			    	}
+
+			    	// The odd construction here is because one branch of this if "eats" args_restore
+			    	let args_restore = if returning {
+			    		args_restore
+			    	} else {
+			    		// More lines to execute in this function! Should not have popped
+			    		self.stack.push((want_return,args_restore,fun,Some(line_num.unwrap()+1),Default::default())); // unwrap known safe, could be unchecked
+			    		None
+			    	};
+
 			    	let returning = returning && want_return; // If the line wants to return but we're in the middle of a multiline function... don't return
+			    	
 			    	if prepare.len() == 0 { // Allow empty lines?? I guess a convenience for builders
 			    		if returning { // This means that () by itself is a shorthand for nil
 			    			returned = Some(self.memory.nil());
@@ -156,7 +170,13 @@ impl Eval {
 				            },
 				            // User defined
 							Value::Array => {
-								self.stack.push((returning,car.clone(),Some(0),Default::default()));
+								// The only complicated part here is juggling the args variable
+								let old_args = self.memory.dict_get(self.memory.globals.clone(), args_str!());
+								let old_args = old_args.unwrap_or_else(||self.memory.nil()); // This should be impossible currently
+								let args = self.memory.array_from_handles(cdr);
+								self.memory.dict_set(self.memory.globals.clone(), args_str!(), args);
+
+								self.stack.push((returning,Some(old_args),car.clone(),Some(0),Default::default()));
 							},
 							// That's it!
 							v @ _ => {
@@ -164,10 +184,18 @@ impl Eval {
 							}
 				        }
 			    	}
-			       	// Peek stack one level, append to prepare and loop
+
+			    	// End-of-function stack cleanup follows
+
+			        // If we're returning and we realized above we need to juggle args, do that
+			        if let Some(args_restore) = args_restore {
+				        self.memory.dict_set(self.memory.globals.clone(), args_str!(), args_restore.clone());
+				    }
+
+			        // Peek stack one level, append to prepare and loop
 			       	// (If appending to prepare ISN'T the right thing to do... something went VERY wrong above!)
 			        if let Some(returned) = returned {
-			        	let Some((_, _, _, prepare)) = self.stack.last_mut() else { panic!("Interpreter internal error"); };
+			        	let Some((_, _, _, _, prepare)) = self.stack.last_mut() else { panic!("Interpreter internal error"); };
 			        	prepare.push(returned);
 			        }
 			    }

@@ -226,10 +226,13 @@ pub fn populate(memory: &mut Memory) {
 	macro_rules! insert_equality {
 		($name:expr, $invert:expr) => { // Third is a fn that returns true if it's time to short circuit
 			insert(memory, $name, Primitive::Builtin(|eval, args| {
+				let invert = $invert;
+				if invert && args.len() > 2 {
+					return Err(Error {message:format!("Too many args to `{}`", $name)});
+				}
 				if args.len() < 2 {
 					return Err(Error {message:format!("Too few args to `{}`", $name)});
 				}
-				let invert = $invert;
 
 				match eval.memory.value(args[0].clone()) {
 					// TODO: Support, at *least*, comparing quotes

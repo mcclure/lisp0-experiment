@@ -1,0 +1,8 @@
+# TODO: MOVE OUT OF LISP DIRECTORY!!!
+# TODO: DICT TEST
+# Expect: x [nil]
+# Expect: y [nil]
+
+(print (get "Expect" 1) sp (get "E" 1) ln)
+
+(print (get '(w x y z) 2) sp (get '(a b c d) 5) ln)

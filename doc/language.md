@@ -41,7 +41,7 @@ Except in the interior of strings or comments, and except when U+FEFF is the ope
 
 # Verification
 
-The directory `sample/test` of this directory contains a sort of "verification test" suite of sample files. Each file is annotated with an expected output in the comments, as parsed by the (pending)script `tools/regression.py`. Scripts which are expected to fail are sorted in subdirectories named "fail". If this file ever differs from a script in this directory, that is to be considered a bug.
+The directory `sample/test` of this directory contains a sort of "verification test" suite of sample files. Each file is annotated with an expected output in the comments, as parsed by the (pending) script `tools/regression.py`. Scripts which are expected to fail are sorted in subdirectories named "fail". If this file ever differs from a script in this directory, that is to be considered a bug.
 
 Some of these files are commented with "tags":
 

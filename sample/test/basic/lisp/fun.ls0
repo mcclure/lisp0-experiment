@@ -1,6 +1,9 @@
-# Check if functions are being called (no args)
+# TODO: DUPLICATE IN NON-LISP
+# Check if functions are being called
 # Expect: 1 2
 # Expect: 3 4
+
+# No args
 
 (set 'do-print '(
 	(set 'z x)
@@ -14,3 +17,31 @@
 (set 'x 3)
 (set 'y 4)
 (do-print)
+
+# Args
+# TODO: len
+
+(set 'print-minus '(
+	(print "in1" ln) # DEBUGGING-- REMOVE ME
+	(print (- (get args 0) 1) sp (- (get args 1) 1) ln)
+	(print "out1" ln) # DEBUGGING-- REMOVE ME
+))
+
+(set 'pass-on-minus '(
+	(print "?? " (get args 0) sp (get args 1) sp (get args 2) ln) # DEBUGGING-- REMOVE ME
+	((get args 0) (- (get args 1) 1) (- (get args 2) 1))
+))
+
+(set 'pass-on-minus-2 '(
+	((get args 0) (- (get args 1) 1) (- (get args 2) 1))
+	((get args 0) (- (get args 1) 2) (- (get args 2) 2))
+))
+
+# Test basic args...
+(print-minus 1 2)
+
+# Test args in nested call...
+(pass-on-minus print-minus 4 5)
+
+# Test args restore after call...
+#(pass-on-minus print-minus 10 11)

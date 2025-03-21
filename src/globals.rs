@@ -259,6 +259,47 @@ pub fn populate(memory: &mut Memory) {
 	insert_equality!("=", false);
 	insert_equality!("!=", true); // FIXME: This is confusing because they all compare against #1.
 
+	// --- Data ---
+
+	insert(memory, "get", Primitive::Builtin(|eval, args| {
+		if args.len() < 2 {
+			return Err(Error {message:format!("Too few args to `get`")});
+		}
+		let handle_option = match eval.memory.value(args[0].clone()) {
+			// TODO: Support, at *least*, comparing quotes
+			Value::Primitive(Primitive::String(s)) => {
+				match eval.memory.value(args[1].clone()) {
+					Value::Primitive(Primitive::Int(i)) => {
+						let idx = i as usize;
+						// This is O(N) :(
+						s.chars().nth(idx).map(|ch|eval.memory.value_new(Value::Primitive(Primitive::String(ch.to_string()))))
+					}
+					v @ _ => return Err(Error {message:format!("Running `get` on string, expected integer index, got: {:?}", v)})
+				}
+			}
+			Value::Array => {
+				match eval.memory.value(args[1].clone()) {
+					Value::Primitive(Primitive::Int(i)) => {
+						let idx = i as usize;
+						eval.memory.array_get(args[0].clone(), idx)
+					}
+					v @ _ => return Err(Error {message:format!("Running `get` on array, expected integer index, got: {:?}", v)})
+				}
+			}
+			Value::Dict => {
+				match eval.memory.value(args[1].clone()) {
+					Value::Primitive(p) => {
+						eval.memory.dict_get(args[0].clone(), p)
+					}
+					v @ _ => return Err(Error {message:format!("Running `get` on dict, expected primitive index, got: {:?}", v)})
+				}
+			}
+			// TODO: Value::Dict, Value::Array, local
+			v @ _ => return Err(Error {message:format!("First argument to `get` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		};
+		Ok(handle_option)
+	}));
+
 	// --- Oddballs ---
 
 	// Takes any number of arguments, returns nil.

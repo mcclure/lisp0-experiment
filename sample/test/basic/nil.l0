@@ -1,0 +1,5 @@
+# Test empty list nil shorthand
+# Expect: [nil]
+
+print ()
+print ln

@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 // If EVERYTHING'S broken
-const TRACE_DEBUG:bool = false;
+const TRACE_DEBUG:bool = true;
 
 type num = i64;
 
@@ -218,6 +218,8 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 
 			    	if ch == '-' {
 			    		state = ReadState::Minus(at);
+
+			    		break 'process;
 			    	}
 
 			    	if ch == '\'' { // '

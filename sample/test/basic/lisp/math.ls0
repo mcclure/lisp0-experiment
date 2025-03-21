@@ -1,7 +1,8 @@
 # Expect: 6 7 38
 # Expect: 6
 # Expect: 1
-# Expect: -5 11 7
+# Expect: 0 9 -10 -5
+# Expect: -5 5 11 7
 
 # Expect: [nil] [true] [nil] [nil] [true]
 # Expect: [true] [nil] [nil] [true] [nil] [true]
@@ -22,10 +23,11 @@
 (print 6 sp (+ 1 6) sp (+ (+ 2 (+ 1 5)) (+ 10 20)) ln)
 (print (* (- 7 4 1) (+ 1 (/ 16 4 2))) ln) # Reduces to (* 2 3)
 (print (% 16 5) ln)
+(print (+ 1 -1) sp (- -1 -10) sp (* 5 -2) sp (/ -10 2) ln)
 
 # BITS
 
-(print (neg 5) sp (& 15 (~ 4)) sp (| 3 6) ln)
+(print (neg 5) sp (neg -5) sp (& 15 (~ 4)) sp (| 3 6) ln)
 
 # LOGIC
 

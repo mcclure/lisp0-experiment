@@ -2,8 +2,19 @@
 # Expect: 6
 # Expect: 1
 # Expect: -5 11 7
+
 # Expect: [nil] [true] [nil] [nil] [true]
 # Expect: [true] [nil] [nil] [true] [nil] [true]
+
+# Expect: [nil] [true]
+# Expect: [true] [nil]
+# Expect: [nil] [true]
+# Expect: [true] [nil]
+# Expect: [nil] [true]
+# Expect: [true] [nil]
+# Expect: [nil] [true]
+# Expect: [nil] [nil]
+
 # Expect: 3 [nil]
 # Expect: [true] [true] [nil]
 # Expect: trip-a trip-b
@@ -11,27 +22,35 @@
 # ARITHMETIC
 
 (print 6 sp (+ 1 6) sp (+ (+ 2 (+ 1 5)) (+ 10 20)) ln)
-
 (print (* (- 7 4 1) (+ 1 (/ 16 4 2))) ln) # Reduces to (* 2 3)
-
 (print (% 16 5) ln)
 
 # BITS
 
-# TODO: sp (neg -5)
 (print (neg 5) sp (& 15 (~ 4)) sp (| 3 6) ln)
 
 # LOGIC
 
 (print (&& true nil) sp (|| nil true) sp (&& true nil true) sp (|| nil nil nil) sp (! nil) ln)
-
 (print (^^ nil true) sp (^^ nil nil) sp (^^ true true) sp (^^ true nil) sp (^^ true nil true) sp (^^ true true true) ln)
+
+# EQUALITY
+
+(print (= 1 3) sp (!= 1 3) ln)
+(print (= 1 1) sp (!= 1 1) ln)
+(print (= "aye" "bee") sp (!= "aye" "bee") ln)
+(print (= "cee" "cee") sp (!= "dee" "dee") ln)
+(print (= 1 "1") sp (!= 1 "1") ln)
+(print (= 1 1 1) sp (!= 1 1 1) ln)
+(print (= 1 2 3 4) sp (!= 1 2 3 4) ln)
+(print (= 1 1 1 2) sp (!= 1 1 1 2) ln)
 
 # ODDITIES AND SHORT CIRCUITING
 
 (print (return 3) sp (discard 3 4 5 3 4) ln)
 
 # TODO make arg 3 an array
+
 (print (&& 3 true) sp (|| "five" nil) sp (^^ true 10) ln)
 
 # TODO contrast with true short circuit

@@ -223,6 +223,39 @@ pub fn populate(memory: &mut Memory) {
 		bool_to_handle(&mut eval.memory, b)
 	}));
 
+	macro_rules! insert_equality {
+		($name:expr, $invert:expr) => { // Third is a fn that returns true if it's time to short circuit
+			insert(memory, $name, Primitive::Builtin(|eval, args| {
+				if args.len() < 2 {
+					return Err(Error {message:format!("Too few args to `{}`", $name)});
+				}
+				let invert = $invert;
+
+				match eval.memory.value(args[0].clone()) {
+					// TODO: Support, at *least*, comparing quotes
+					Value::Primitive(p) => {
+						for idx in 1..args.len() {
+							let mut result = match eval.memory.value(args[idx].clone()) {
+								Value::Primitive(p2) => p == p2,
+								_ => false
+							};
+							result = result ^ invert;
+							if !result {
+								return Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Nil)))) // Functionally I could return nil here but this is more "idiomatic"
+							}
+						}
+						Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::True))))
+					}
+					// TODO: Value::Dict, Value::Array, local
+					v @ _ => Err(Error {message:format!("First argument to `{}` unrecognized: {:?}", $name, v)}) // TODO: Display not Debug
+				}
+			}));
+		}
+	}
+
+	insert_equality!("=", false);
+	insert_equality!("!=", true); // FIXME: This is confusing because they all compare against #1.
+
 	// --- Oddballs ---
 
 	// Takes any number of arguments, returns nil.

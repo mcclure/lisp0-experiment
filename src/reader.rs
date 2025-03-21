@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 // If EVERYTHING'S broken
-const TRACE_DEBUG:bool = true;
+const TRACE_DEBUG:bool = false;
 
 type num = i64;
 
@@ -88,7 +88,7 @@ fn generate_illegal_chars() -> HashSet<char> {
 }
 
 fn is_whitespace(ch: char) -> bool { // TODO UNICODE
-	ch == ' ' || ch == '\r' || ch == '\n'
+	ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'
 }
 
 fn is_num(ch:char) -> bool { // TODO UNICODE

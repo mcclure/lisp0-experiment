@@ -44,7 +44,7 @@ impl Eval {
 	pub fn eval(&mut self) -> Result<(), Error> {
 		macro_rules! args_str { // We need this string like three places below, I don't want to keep retyping it
 			() => {
-				Primitive::String("args".to_string());
+				Primitive::String("args".to_string())
 			}
 		}
 

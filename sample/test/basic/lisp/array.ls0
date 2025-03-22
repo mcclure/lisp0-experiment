@@ -1,0 +1,15 @@
+# List operators
+# Expect: 0 3
+# Expect: 1 f [true] [nil]
+# Expect: 5 g h [true] [nil]
+
+(set 'a (make-array))
+(set 'b (make-array 'c 'd 'e))
+
+(print (len a) sp (len b) ln)
+
+(push a 'f)
+(push b 'g 'h)
+
+(print (len a) sp (get a 0) sp (has a 0) sp (has a 1) ln)
+(print (len b) sp (get b 3) sp (get b 4) sp (has b 4) sp (has b 5) ln)

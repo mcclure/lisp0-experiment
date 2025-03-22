@@ -1,0 +1,9 @@
+# List operators
+# Expect: 0 2
+# Expect: [nil] d [nil] f
+
+(set 'a (make-dict))
+(set 'b (make-array 'c 'd 'e 'f))
+
+(print (len a) sp (len b) ln)
+(print (get a 'c) (get b 'c) (get b 'd) (get b 'e))

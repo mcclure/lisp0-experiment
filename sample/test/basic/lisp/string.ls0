@@ -1,0 +1,9 @@
+# List operators
+# Expect: 0 3
+# Expect: [nil] c
+
+(set 'a "")
+(set 'b "cdefg")
+
+(print (len a) sp (len b) ln)
+(print (get a 0) (get b 0))

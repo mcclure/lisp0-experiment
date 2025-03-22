@@ -261,6 +261,52 @@ pub fn populate(memory: &mut Memory) {
 
 	// --- Data ---
 
+	insert(memory, "make-array", Primitive::Builtin(|eval, args| {
+		Ok(Some(eval.memory.array_from_handles(args)))
+	}));
+
+	// TODO: I don't like this and I'd rather some kinda '(pair) form
+	// FIXME: Dupes are allowed. Is that bad?
+	insert(memory, "make-dict", Primitive::Builtin(|eval, args| {
+		let dict = eval.memory.dict_new();
+		if args.len() % 2 != 0 {
+			return Err(Error {message:format!("Non-even number of args to `make-dict`")});
+		}
+		// TODO itertools chunks
+		for idx in (0..args.len()).step_by(2) {
+			let idx2 = idx + 1;
+			match eval.memory.value(args[idx].clone()) {
+				Value::Primitive(p) => {
+					eval.memory.dict_set(dict.clone(), p, args[idx2].clone());
+				}
+				v @ _ => return Err(Error {message:format!("Argument {idx} (key #{}) to `make-dict` is not a primitive: {:?}", idx/2, v)}) // TODO: Display not Debug
+			}
+		}
+		Ok(Some(dict))
+	}));
+
+	insert(memory, "len", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:format!("Expected exactly one argument to `len`")});
+		}
+		let len = match eval.memory.value(args[0].clone()) {
+			// TODO: Support, at *least*, comparing quotes
+			Value::Primitive(Primitive::String(s)) => {
+				s.len()
+			}
+			Value::Array => {
+				eval.memory.array_len(args[0].clone())
+			}
+			Value::Dict => {
+				eval.memory.dict_len(args[0].clone())
+			}
+			// TODO: Value::Dict, Value::Array, local
+			v @ _ => return Err(Error {message:format!("First argument to `len` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		};
+		Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(len as i64)))))
+	}));
+
+	// FIXME merge with "get" above
 	insert(memory, "get", Primitive::Builtin(|eval, args| {
 		if args.len() < 2 {
 			return Err(Error {message:format!("Too few args to `get`")});
@@ -299,6 +345,81 @@ pub fn populate(memory: &mut Memory) {
 		};
 		Ok(handle_option)
 	}));
+
+	insert(memory, "push", Primitive::Builtin(|eval, args| {
+		if args.len() < 2 {
+			return Err(Error {message:format!("Too few args to `push`")});
+		}
+		match eval.memory.value(args[0].clone()) {
+			Value::Array => {
+				for idx in 1..args.len() {
+					eval.memory.array_push(args[0].clone(), args[idx].clone());
+				}
+			}
+			// TODO: Value::Dict, Value::Array, local
+			v @ _ => return Err(Error {message:format!("First argument to `push` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		};
+		Ok(None)
+	}));
+
+	insert(memory, "has", Primitive::Builtin(|eval, args| {
+		if args.len() != 2 {
+			return Err(Error {message:format!("`has` expects exactly 2 arguments")});
+		}
+		let has = match eval.memory.value(args[0].clone()) {
+			// TODO: Support, at *least*, comparing quotes
+			Value::Primitive(Primitive::String(s)) => {
+				match eval.memory.value(args[1].clone()) {
+					Value::Primitive(Primitive::Int(i)) => {
+						let idx = i as usize;
+						idx < s.len()
+					}
+					v @ _ => return Err(Error {message:format!("Running `get` on string, expected integer index, got: {:?}", v)})
+				}
+			}
+			Value::Array => {
+				match eval.memory.value(args[1].clone()) {
+					Value::Primitive(Primitive::Int(i)) => {
+						let idx = i as usize;
+						idx < eval.memory.array_len(args[0].clone())
+					}
+					v @ _ => return Err(Error {message:format!("Running `get` on array, expected integer index, got: {:?}", v)})
+				}
+			}
+			Value::Dict => {
+				match eval.memory.value(args[1].clone()) {
+					Value::Primitive(p) => {
+						eval.memory.dict_has(args[0].clone(), p)
+					}
+					v @ _ => return Err(Error {message:format!("Running `get` on dict, expected primitive index, got: {:?}", v)})
+				}
+			}
+			// TODO: Value::Dict, Value::Array, local
+			v @ _ => return Err(Error {message:format!("First argument to `get` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		};
+		bool_to_handle(&mut eval.memory, has)
+	}));
+
+	insert(memory, "del", Primitive::Builtin(|eval, args| {
+		if args.len() < 2 {
+			return Err(Error {message:format!("Too few args to `del`")});
+		}
+		match eval.memory.value(args[0].clone()) {
+			// TODO: Support lots of other things
+			Value::Dict => {
+				match eval.memory.value(args[1].clone()) {
+					Value::Primitive(p) => {
+						eval.memory.dict_del(args[0].clone(), p)
+					}
+					v @ _ => return Err(Error {message:format!("Running `del` on dict, expected primitive index, got: {:?}", v)})
+				}
+			}
+			// TODO: Value::Dict, Value::Array, local
+			v @ _ => return Err(Error {message:format!("First argument to `get` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		};
+		Ok(None)
+	}));
+
 
 	// --- Oddballs ---
 

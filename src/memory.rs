@@ -307,7 +307,7 @@ impl Memory {
 		ary[idx] = addr;
 	}
 
-	pub fn array_push(&mut self, handle:MemHandle, idx:usize, dst:MemHandle) {
+	pub fn array_push(&mut self, handle:MemHandle, dst:MemHandle) {
 		let addr = self.handle_to_addr(dst);
 		let cell = self.cell_mut(handle);
 		let MemCell::Array(ary) = cell else { panic!("Expected array") };
@@ -335,6 +335,18 @@ impl Memory {
 		self.handle_new(cell)
 	}
 
+	pub fn dict_len(&mut self, handle: MemHandle) -> usize {
+		let cell = self.cell_mut(handle);
+		let MemCell::Dict(dict) = cell else { panic!("Expected dict") };
+		dict.len()
+	}
+
+	pub fn dict_has(&mut self, handle:MemHandle, key:Primitive) -> bool {
+		let cell = self.cell_mut(handle);
+		let MemCell::Dict(dict) = cell else { panic!("Expected dict") };
+		dict.contains_key(&key)
+	}
+
 	// TODO: dict_size, dict_keys
 	pub fn dict_get(&mut self, handle:MemHandle, key:Primitive) -> Option<MemHandle> {
 		let cell = self.cell_mut(handle);
@@ -360,5 +372,11 @@ impl Memory {
 		let cell = self.cell_mut(handle);
 		let MemCell::Dict(dict) = cell else { panic!("Expected dict") };
 		dict.insert(key, addr2);
+	}
+
+	pub fn dict_del(&mut self, handle: MemHandle, key:Primitive) {
+		let cell = self.cell_mut(handle);
+		let MemCell::Dict(dict) = cell else { panic!("Expected dict") };
+		dict.remove(&key);
 	}
 }

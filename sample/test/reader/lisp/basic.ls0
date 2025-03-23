@@ -1,3 +1,4 @@
+# Arg: --debug-ast
 # Expect: (("d"), ("e"), ("f"))
 (d)
 (e )

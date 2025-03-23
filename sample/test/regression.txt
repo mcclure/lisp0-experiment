@@ -1,0 +1,17 @@
+# Tests expected to pass.
+# Note: Currently, ls0s only
+
+reader/lisp/basic.ls0
+reader/lisp/quote.ls0
+reader/lisp/blank.ls0
+reader/lisp/values.ls0
+reader/lisp/structure.ls0
+
+basic/lisp/math.ls0
+basic/lisp/fun.ls0
+basic/lisp/dict.ls0
+basic/lisp/fail/no-such-var.ls0
+basic/lisp/setprint.ls0
+basic/lisp/array.ls0
+basic/lisp/string.ls0
+basic/lisp/get.ls0

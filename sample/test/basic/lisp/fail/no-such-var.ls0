@@ -1,5 +1,5 @@
 # Modeled on setprint
-# Expect: 3 4 5 six 9223372036854775807
+# Expect failure
 
 (set 'x 4)
 (set 'y x)

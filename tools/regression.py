@@ -420,16 +420,6 @@ class CargoRunner(BaseRunner):
         elif phase == 1:
             return s.interpreterinvoke + s.normalargs() + s.appargs
 
-class IncompleteRunner(BaseRunner): # Compiler does not work well right now, so it uses whitelist
-    def should(s):
-        if not super(IncompleteRunner, s).should():
-            return False
-        for x in s.tags:
-            for y in s.name():
-                if x == y:
-                    return True
-        return False
-
 # The purpose of the "drivers" is if files are being compiled rather than interpreted,
 # Requiring multiple steps per execution.
 drivers = {

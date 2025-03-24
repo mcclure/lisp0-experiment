@@ -21,6 +21,8 @@ fn main() -> anyhow::Result<()> {
     struct Cli {
         #[arg(short='v', long="version")]
         version: bool,
+        #[arg(long="disable-fs", help="Suppress file I/O")]
+        disable_fs: bool,
         #[arg(long="debug-ast", help="(Internal debug) Show reader output")]
         debug_ast: bool,
         #[arg(long="debug-mem-size", help="(Internal debug) Set initial GC space size", default_value_t=0, hide_default_value=true)]
@@ -53,7 +55,7 @@ fn main() -> anyhow::Result<()> {
             crate::globals::populate(&mut memory);
 
             let root = memory.construct(v.source.content);
-            let mut eval = crate::eval::Eval::new(memory, root);
+            let mut eval = crate::eval::Eval::new(memory, root, !cli.disable_fs);
 
             eval.eval().map_err( |e| e.into() )
         }

@@ -1,9 +1,13 @@
 //! "Standard library"
 
+use clap::builder::OsStringValueParser;
+
 use crate::eval::{Eval, Error};
-use crate::memory::{Memory, MemHandle, Value, Primitive};
+use crate::memory::{MemHandle, MemHandleImpl, Memory, Primitive, Value};
 
 use std::fmt;
+use std::io::stdin;
+use std::io::{Read, BufRead};
 
 // Note: At present, it is assumed that all exec lists include the builtin itself as 0th argument.
 
@@ -420,6 +424,103 @@ pub fn populate(memory: &mut Memory) {
 		Ok(None)
 	}));
 
+
+	// --- File ---
+
+	insert(memory, "file-allowed", Primitive::Builtin(|eval, _| {
+		bool_to_handle(&mut eval.memory, eval.file_allow)
+	}));
+
+	// TODO: Support bytes for paths, input, output
+	fn handle_to_path(eval: &Eval, name:&str, handle:MemHandle) -> Result<std::path::PathBuf, Error> {
+		if !eval.file_allow {
+			return Err(Error {message:format!("Called `file-exists` but fs is disabled")});
+		}
+		match eval.memory.value(handle) {
+			// TODO: Support lots of other things
+			Value::Primitive(Primitive::String(s)) => {
+				return Ok(std::path::PathBuf::from(std::ffi::OsString::from(s)))
+			}
+			// TODO: Value::Dict, Value::Array, local
+			v @ _ => return Err(Error {message:format!("First argument to `{name}` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		}
+	}
+
+	fn fmt_fs_error(e:std::io::Error, name:&str) -> Error {
+		Error {message:format!("Filesystem failure running `{name}`: {}", e)}
+	}
+
+	insert(memory, "file-exists", Primitive::Builtin(|eval, args| {
+		if args.len() < 2 {
+			return Err(Error {message:format!("`file-exists` expects exactly 1 argument")});
+		}
+		let path = handle_to_path(&eval, "file-exists", args[0].clone())?;
+		bool_to_handle(&mut eval.memory, std::fs::exists(path).map_err(|e|fmt_fs_error(e, "file-exists"))?)
+	}));
+
+	macro_rules! insert_fileopen {
+		($name:expr, $target:ident, $limit:expr, $create:expr) => { // Third is just executed
+			insert(memory, $name, Primitive::Builtin(|eval, args| {
+				if args.len() < 1 {
+					return Err(Error {message:format!("Too few args to `{}`", $name)});
+				}
+				if args.len() > $limit {
+					return Err(Error {message:format!("Too many args to `{}`", $name)});
+				}
+				let path = handle_to_path(&eval, $name, args[0].clone())?;
+				if eval.$target.is_some() {
+					eval.$target = None;
+				}
+				let open = $create;
+				let file = open(&eval.memory, args, path);
+				let file = file.map_err(|e|fmt_fs_error(e, $name))?;
+				eval.$target = Some(file);
+				Ok(None)
+			}));
+		}
+	}
+
+	insert_fileopen!("file-in", file_in, 1, |_, _, path| {
+		std::fs::File::open(path).map(|f| std::io::BufReader::new(f))
+	});
+
+	// Arguments: path, create, truncate
+	insert_fileopen!("file-out", file_out, 3, |memory:&Memory, args:&[MemHandle], path| {
+		let create = args.len() > 1 && value_to_bool(memory.value(args[1].clone()));
+		let truncate = args.len() > 2 && value_to_bool(memory.value(args[2].clone()));
+
+		std::fs::OpenOptions::new().write(true).create(create).truncate(truncate).open(path)
+	});
+
+	insert(memory, "read-line", Primitive::Builtin(|eval, args| {
+		if args.len() > 0 {
+			return Err(Error {message:format!("`file-line` expects no arguments")});
+		}
+
+		let s = if let Some(file) = &mut eval.file_in {
+			file.by_ref().lines().next()
+		} else {
+			std::io::stdin().lock().lines().next()
+		};
+
+		s.map(|x|x.map(|s|eval.memory.value_new(Value::Primitive(Primitive::String(s)))).map_err(|e|fmt_fs_error(e, "read-line"))).transpose()
+	}));
+
+	// CONSIDER: Is it correct that at EOF this returns "" instead of nil?
+	insert(memory, "read-all", Primitive::Builtin(|eval, args| {
+		if args.len() < 2 {
+			return Err(Error {message:format!("`read-all` expects no arguments")});
+		}
+		let mut s = String::new();
+		let result = if let Some(file) = &mut eval.file_in {
+			file.by_ref().read_to_string(&mut s)
+		} else {
+			std::io::stdin().lock().read_to_string(&mut s)
+		};
+		result.map_err(|e|fmt_fs_error(e, "read-all"))?;
+
+		Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::String(s)))))
+	}));
 
 	// --- Oddballs ---
 

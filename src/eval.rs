@@ -21,7 +21,12 @@ impl std::error::Error for Error {}
 
 pub struct Eval {
 	pub memory: Memory,
-	stack: Vec<(bool, Option<MemHandle>, MemHandle, Option<usize>, Vec<MemHandle>)> // want-return?, restore-arg-on-return, function, linenum-at, line-in-progress
+	stack: Vec<(bool, Option<MemHandle>, MemHandle, Option<usize>, Vec<MemHandle>)>, // want-return?, restore-arg-on-return, function, linenum-at, line-in-progress
+
+	// Scratch space for globals.rs
+	pub file_allow: bool,
+	pub file_in: Option<std::io::BufReader<std::fs::File>>,
+	pub file_out: Option<std::fs::File>
 }
 
 enum PrepareNext {
@@ -34,10 +39,11 @@ enum StackNext {
 }
 
 impl Eval {
-	pub fn new(memory: Memory, root: MemHandle) -> Self {
+	pub fn new(memory: Memory, root: MemHandle, file_allow: bool) -> Self {
 		Self {
 			memory,
-			stack: vec![(false, None, root, Some(0), Default::default())]
+			stack: vec![(false, None, root, Some(0), Default::default())],
+			file_allow, file_in: None, file_out: None
 		}
 	}
 

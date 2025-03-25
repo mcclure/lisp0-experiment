@@ -7,7 +7,7 @@ use crate::memory::{MemHandle, MemHandleImpl, Memory, Primitive, Value};
 
 use std::fmt;
 use std::io::stdin;
-use std::io::{Read, BufRead};
+use std::io::{Write, Read, BufRead};
 
 // Note: At present, it is assumed that all exec lists include the builtin itself as 0th argument.
 
@@ -16,6 +16,10 @@ fn insert(memory: &mut Memory, name:&str, primitive:Primitive) {
 }
 
 pub fn populate(memory: &mut Memory) {
+	fn fmt_fs_error(e:std::io::Error, name:&str) -> Error {
+		Error {message:format!("Filesystem failure running `{name}`: {}", e)}
+	}
+
 	// --- Core ---
 
 	insert(memory, "set", Primitive::Builtin(|eval, args| {
@@ -58,9 +62,28 @@ pub fn populate(memory: &mut Memory) {
 	}));
 
 	insert(memory, "print", Primitive::Builtin(|eval, args| {
-		for arg in args {
-			print!("{}", eval.memory.value(arg.clone())); // TODO: "Consume" input
+		if let Some(file) = &mut eval.file_out {
+			for arg in args { // TODO: In both loops "consume" input
+				write!(file, "{}", eval.memory.value(arg.clone())).map_err(|e|fmt_fs_error(e, "print"))
+					?;
+			}
+		} else {
+			for arg in args {
+				print!("{}", eval.memory.value(arg.clone()));
+			}
 		}
+		Ok(None)
+	}));
+
+	insert(memory, "flush", Primitive::Builtin(|eval, args| {
+		if args.len() > 0 {
+			return Err(Error {message:"`flush` expects 0 args".to_string()});
+		}
+		if let Some(file) = &mut eval.file_out {
+			file.flush()
+		} else {
+			std::io::stdout().flush()
+		}.map_err(|e|fmt_fs_error(e, "print"))?;
 		Ok(None)
 	}));
 
@@ -432,29 +455,31 @@ pub fn populate(memory: &mut Memory) {
 	}));
 
 	// TODO: Support bytes for paths, input, output
-	fn handle_to_path(eval: &Eval, name:&str, handle:MemHandle) -> Result<std::path::PathBuf, Error> {
+	fn handle_to_path(eval: &Eval, name:&str, handle:MemHandle, nil_ok:bool) -> Result<Option<std::path::PathBuf>, Error> {
 		if !eval.file_allow {
-			return Err(Error {message:format!("Called `file-exists` but fs is disabled")});
+			return Err(Error {message:format!("Called `{name}` but fs is disabled")});
 		}
 		match eval.memory.value(handle) {
-			// TODO: Support lots of other things
+			Value::Primitive(Primitive::Nil) => {
+				if nil_ok {
+					Ok(None)
+				} else {
+					Err(Error {message:format!("Argument nil to `{name}` unrecognized")})
+				}
+			},
 			Value::Primitive(Primitive::String(s)) => {
-				return Ok(std::path::PathBuf::from(std::ffi::OsString::from(s)))
+				Ok(Some(std::path::PathBuf::from(std::ffi::OsString::from(s))))
 			}
 			// TODO: Value::Dict, Value::Array, local
-			v @ _ => return Err(Error {message:format!("First argument to `{name}` unrecognized: {:?}", v)}) // TODO: Display not Debug
+			v @ _ => Err(Error {message:format!("First argument to `{name}` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		}
-	}
-
-	fn fmt_fs_error(e:std::io::Error, name:&str) -> Error {
-		Error {message:format!("Filesystem failure running `{name}`: {}", e)}
 	}
 
 	insert(memory, "file-exists", Primitive::Builtin(|eval, args| {
 		if args.len() < 2 {
 			return Err(Error {message:format!("`file-exists` expects exactly 1 argument")});
 		}
-		let path = handle_to_path(&eval, "file-exists", args[0].clone())?;
+		let path = handle_to_path(&eval, "file-exists", args[0].clone(), false)?.unwrap(); // Nil impossible
 		bool_to_handle(&mut eval.memory, std::fs::exists(path).map_err(|e|fmt_fs_error(e, "file-exists"))?)
 	}));
 
@@ -467,14 +492,18 @@ pub fn populate(memory: &mut Memory) {
 				if args.len() > $limit {
 					return Err(Error {message:format!("Too many args to `{}`", $name)});
 				}
-				let path = handle_to_path(&eval, $name, args[0].clone())?;
+				let path = handle_to_path(&eval, $name, args[0].clone(), true)?;
 				if eval.$target.is_some() {
 					eval.$target = None;
 				}
 				let open = $create;
-				let file = open(&eval.memory, args, path);
-				let file = file.map_err(|e|fmt_fs_error(e, $name))?;
-				eval.$target = Some(file);
+				eval.$target = if let Some(path) = path {
+					let file = open(&eval.memory, args, path);
+					let file = file.map_err(|e|fmt_fs_error(e, $name))?;
+					Some(file)
+				} else {
+					None
+				};
 				Ok(None)
 			}));
 		}

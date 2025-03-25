@@ -1,0 +1,8 @@
+# AppArg: $$TEMP$$
+# Expect failure
+
+(set 'path (get args 0))
+
+(file-in path)
+
+(read-line)

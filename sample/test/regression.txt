@@ -7,9 +7,11 @@ reader/lisp/blank.ls0
 reader/lisp/values.ls0
 reader/lisp/structure.ls0
 
+
 basic/lisp/math.ls0
 basic/lisp/fun.ls0
 basic/lisp/dict.ls0
+basic/lisp/nil.ls0
 basic/lisp/fail/no-such-var.ls0
 basic/lisp/setprint.ls0
 basic/lisp/array.ls0
@@ -19,3 +21,5 @@ basic/lisp/get.ls0
 io/lisp/args.ls0
 io/lisp/args-0.ls0
 io/lisp/file.ls0
+io/lisp/fail/file-disabled.ls0
+io/lisp/fail/open-dir.ls0

@@ -1,0 +1,9 @@
+# Arg: --disable-fs
+# AppArg: $$TEMP$$
+# Expect: [nil]
+# Expect failure
+
+(set 'path (+ (get args 0) "/tempfile.txt"))
+
+(print (file-allowed) ln)
+(print (file-exists path) ln)

@@ -1,0 +1,4 @@
+# Simple freeform arg tester, prints number of arguments and first argument.
+
+(print (len args) ln)
+(print (get args 0) ln)

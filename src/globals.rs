@@ -15,7 +15,7 @@ fn insert(memory: &mut Memory, name:&str, primitive:Primitive) {
 	memory.dict_set_value(memory.globals.clone(), Primitive::String(name.to_string()), Value::Primitive(primitive));
 }
 
-pub fn populate(memory: &mut Memory) {
+pub fn populate(memory: &mut Memory, args:&[String]) {
 	fn fmt_fs_error(e:std::io::Error, name:&str) -> Error {
 		Error {message:format!("Filesystem failure running `{name}`: {}", e)}
 	}
@@ -77,7 +77,7 @@ pub fn populate(memory: &mut Memory) {
 
 	insert(memory, "flush", Primitive::Builtin(|eval, args| {
 		if args.len() > 0 {
-			return Err(Error {message:"`flush` expects 0 args".to_string()});
+			return Err(Error {message:"`flush` expects no arguments".to_string()});
 		}
 		if let Some(file) = &mut eval.file_out {
 			file.flush()
@@ -476,7 +476,7 @@ pub fn populate(memory: &mut Memory) {
 	}
 
 	insert(memory, "file-exists", Primitive::Builtin(|eval, args| {
-		if args.len() < 2 {
+		if args.len() != 1 {
 			return Err(Error {message:format!("`file-exists` expects exactly 1 argument")});
 		}
 		let path = handle_to_path(&eval, "file-exists", args[0].clone(), false)?.unwrap(); // Nil impossible
@@ -537,7 +537,7 @@ pub fn populate(memory: &mut Memory) {
 
 	// CONSIDER: Is it correct that at EOF this returns "" instead of nil?
 	insert(memory, "read-all", Primitive::Builtin(|eval, args| {
-		if args.len() < 2 {
+		if args.len() > 0 {
 			return Err(Error {message:format!("`read-all` expects no arguments")});
 		}
 		let mut s = String::new();
@@ -579,5 +579,9 @@ pub fn populate(memory: &mut Memory) {
 	insert(memory, "INT_MAX", Primitive::Int(std::i64::MAX));
 
 	// TODO: Either don't do this, or make a specific decision to overwrite it with real args
-	insert(memory, "args", Primitive::Nil);
+	{
+		let args: Vec<MemHandle> = args.iter().map(|s|memory.value_new(Value::Primitive(Primitive::String(s.clone())))).collect();
+		let args = memory.array_from_handles(&args);
+		memory.dict_set(memory.globals.clone(), Primitive::String("args".to_string()), args)
+	}
 }

@@ -1,0 +1,23 @@
+# AppArg: $$TEMP$$
+
+# Expect:
+# [true]
+# [nil]
+# [true]
+# a x bc y def
+# ghi
+# z
+
+(set 'path (+ (get args 0) "/tempfile.txt"))
+
+(print (file-allowed) ln)
+(print (file-exists path) ln)
+
+(file-out path true true)
+(print 'a ln 'bc ln 'def ln 'ghi ln)
+(file-out nil)
+
+(print (file-exists path) ln)
+
+(file-in path)
+(print (read-line) sp 'x sp (read-line) sp 'y sp (read-all) 'z ln)

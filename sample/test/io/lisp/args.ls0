@@ -1,0 +1,8 @@
+# Test args
+# AppArg: 2
+# AppArg: x
+# AppArg: 2 x
+
+# Expect: 3 2 x [true]
+
+(print (len args) sp (get args 0) sp (get args 1) sp (= "2 x" (get args 2)) ln)

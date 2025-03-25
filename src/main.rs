@@ -27,7 +27,9 @@ fn main() -> anyhow::Result<()> {
         debug_ast: bool,
         #[arg(long="debug-mem-size", help="(Internal debug) Set initial GC space size", default_value_t=0, hide_default_value=true)]
         debug_mem_size: usize,
-        filepath: Option<PathBuf>
+        filepath: Option<PathBuf>,
+        #[clap(last=true, num_args = 0..)]
+        pub args: Vec<String>,
     }
     let cli = Cli::parse();
 
@@ -52,7 +54,7 @@ fn main() -> anyhow::Result<()> {
                 crate::memory::Memory::new()
             };
 
-            crate::globals::populate(&mut memory);
+            crate::globals::populate(&mut memory, &cli.args);
 
             let root = memory.construct(v.source.content);
             let mut eval = crate::eval::Eval::new(memory, root, !cli.disable_fs);

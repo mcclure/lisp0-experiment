@@ -15,3 +15,7 @@ basic/lisp/setprint.ls0
 basic/lisp/array.ls0
 basic/lisp/string.ls0
 basic/lisp/get.ls0
+
+io/lisp/args.ls0
+io/lisp/args-0.ls0
+io/lisp/file.ls0

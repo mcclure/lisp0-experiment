@@ -33,6 +33,8 @@
 #
 #   # Tags: SOMETHING SOMETHING
 #       Special tags (from Emily2, was used to exempt tests from some drivers, unused here)
+#
+# Arg, AppArg, and Env may contain $$TEMP$$ which will become a temp directory path.
 
 # Usage: ./develop/regression.py -a
 # Tested with Python 2.6.1
@@ -44,6 +46,7 @@ import optparse
 import re
 import copy
 import codecs
+import tempfile
 
 def projectRelative( filename ):
     return os.path.normpath(os.path.join(prjroot, filename))
@@ -173,6 +176,7 @@ envp = re.compile(r'# Env:\s*(.+)$', re.I)
 kvp = re.compile(r'(\w+)=(.+)$')
 omitp = re.compile(r'# Omit\s*file', re.I)
 tagsp = re.compile(r'# Tags:\s*(.+)$', re.I)
+tempslug = "$$TEMP$$"
 
 def pretag(tag, str):
     tag = u"\t%s: " % (tag)
@@ -224,6 +228,23 @@ class BaseRunner(object):
     # Subclasses MUST reimplement-- return full invocation for given phase
     def phaseinvoke(s, phase):
         raise RuntimeError()
+
+    # Shared, sorts
+    def tempscan(s):
+        def iter(e):
+            if type(e) is list:
+                return range(len(e))
+            else:
+                return e.keys()
+        tempdir = None
+        for target in [s.args, s.appargs, s.env]:
+            if target:
+                for key in iter(target):
+                    if target[key].find(tempslug) >= 0:
+                        if not tempdir:
+                            tempdir = tempfile.TemporaryDirectory()
+                        target[key] = target[key].replace(tempslug, tempdir.name)
+        return tempdir
 
     # Shared, runs a single phase for a single file
     def phaserun(s, phase):
@@ -340,10 +361,17 @@ class BaseRunner(object):
             s.outlines = s.outlines.rstrip()
             s.expectfail = bool(s.expectfail)
 
+            tempdir = s.tempscan()
+
+            # Actually run the test here
             for phase in range(s.phases()):
                 if not s.phaserun(phase):
                     s.failures += 1
                     break
+
+            if tempdir:
+                tempdir.cleanup()
+                tempdir = None
         else:
             if verboseskip:
                 print("Skipping %s..." % (s.filename))
@@ -418,7 +446,7 @@ class CargoRunner(BaseRunner):
         if phase == 0:
             return s.cargoinvoke
         elif phase == 1:
-            return s.interpreterinvoke + s.normalargs() + s.appargs
+            return s.interpreterinvoke + s.normalargs() + (["--"] if s.appargs else []) + s.appargs
 
 # The purpose of the "drivers" is if files are being compiled rather than interpreted,
 # Requiring multiple steps per execution.

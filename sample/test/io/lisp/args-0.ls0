@@ -1,0 +1,4 @@
+# Test args (absence of)
+# Expect: [nil] 0
+
+(print (= nil args) sp (len args) ln)

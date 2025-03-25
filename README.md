@@ -1,1 +1,7 @@
 This is an interpreter for a programming language. The language is documented [in the doc directory](doc/language.md). At this time, there is no license and you are granted no rights to it.
+
+## Development
+
+To run the tests:
+
+    ./develop/regression.py -a

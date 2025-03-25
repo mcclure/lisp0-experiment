@@ -1,0 +1,40 @@
+%YAML 1.2
+---
+name: lisp0
+file_extensions: [l0, ls0]
+scope: source.lisp0
+
+# TODO: Make true and nil look like values, not keywords
+# TODO: Bold (parens)
+# TODO: Make first word of each (call) bold blue like a keyword
+
+contexts:
+  main:
+    # # to end of line is comment
+    - match: \#.*$
+      scope: comment.line.lisp0
+
+    # Anything between quotes is a string (support \\ and \")
+    - match: \"
+      push: string
+
+    # Backslash quotestrings
+    - match: \'([^\(\)\[\]\{\}\'\"])
+      scope: string.quoted.single.lisp0
+
+    # Keywords
+    - match: (\b(nil|true)\b|=)
+      scope: keyword.control.lisp0
+
+    # Numbers
+    - match: \b(\.\d+|\d+(\.\d*)?)\b
+      scope: constant.numeric.lisp0
+
+  # Push modes
+
+  string:
+  - meta_scope: string.quoted.double.lisp0
+  - match: \\.
+    scope: constant.character.escape.lisp0
+  - match: \"
+    pop: true

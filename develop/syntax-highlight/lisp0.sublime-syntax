@@ -19,7 +19,7 @@ contexts:
       push: string
 
     # Backslash quotestrings
-    - match: \'([^\(\)\[\]\{\}\'\"])
+    - match: \'([^\(\)\[\]\{\}\'\"\s]+)
       scope: string.quoted.single.lisp0
 
     # Keywords

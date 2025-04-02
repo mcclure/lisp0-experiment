@@ -138,25 +138,30 @@ impl Memory {
 		if self.space_top() >= self.spaces[self.space_parity as usize].capacity() {
 			// COLLECT
 
+			type Todo = VecDeque<(MemAddr, MemCell)>;
+
 			// For forward_ method, input is index in FROM, output is index in TO
-			fn forward_one(space_from: &mut MemSpace, space_to: &mut MemSpace, root_from:MemAddr, todo:&mut VecDeque<MemAddr>) -> MemAddr {
+			fn forward_one(space_from: &mut MemSpace, space_to: &mut MemSpace, root_from:MemAddr, todo:&mut Todo) -> MemAddr {
 				if let MemCell::Forward(addr_to) = space_from[root_from] {
 					addr_to
 				} else {
-					let addr_to = space_to.len();
-					space_to.push( // Three card monte
-						std::mem::replace(&mut space_from[root_from], MemCell::Forward(addr_to))
-					);
-					todo.push_back(addr_to);
+					// This depends on math magic to work: We would like to push the cell to space_to, but
+					// we need the cell to *not* be in space_to when we walk it in forward_all, or else
+					// space_to will lock and we won't be able to push to it while walking. So we put the
+					// cell itself in the todo list, and assume the place we'll land is the current len
+					// plus the current queue size. This can be improved later by writing a custom Vec.
+					let addr_to = space_to.len() + todo.len();
+					let cell = std::mem::replace(&mut space_from[root_from], MemCell::Forward(addr_to));
+					todo.push_back((addr_to, cell));
 					addr_to
 				}
 			}
 			fn forward_all(space_from: &mut MemSpace, space_to: &mut MemSpace, root:MemAddr) -> MemAddr {
-				let mut todo:VecDeque<MemAddr> = Default::default();
+				let mut todo: Todo = Default::default();
 				let root = forward_one(space_from, space_to, root, &mut todo);
-				while let Some(addr_to) = todo.pop_front() {
+				while let Some((addr_to, mut cell)) = todo.pop_front() {
 					// TODO: "Pop out" the value instead of pulling it from todo
-					match &mut space_to[addr_to] {
+					match &mut cell {
 				        MemCell::Primitive(_) => (),
 				        MemCell::Quote(addr) =>
 				        	*addr = forward_one(space_from, space_to, *addr, &mut todo),
@@ -172,6 +177,7 @@ impl Memory {
 				        }
 				        MemCell::Forward(_) => panic!("Interpreter internal error during GC"),
 				    }
+				    space_to.push(cell); // See "math magic" above
 				}
 				root
 			}

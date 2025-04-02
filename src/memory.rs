@@ -1,6 +1,7 @@
 //! Memory management / allocation / garbage collection
 // TODO: GC
 // TODO: Drop handler on handles
+// TODO: Special address 0
 
 use crate::reader::AstContent;
 use crate::eval;
@@ -135,7 +136,65 @@ impl Memory {
 
 	fn alloc_internal(&mut self, data: MemCell) -> MemAddr {
 		if self.space_top() >= self.spaces[self.space_parity as usize].capacity() {
-			panic!("Code can't garbage collect yet");
+			// COLLECT
+
+			// For forward_ method, input is index in FROM, output is index in TO
+			fn forward_one(space_from: &mut MemSpace, space_to: &mut MemSpace, root_from:MemAddr, todo:&mut VecDeque<MemAddr>) -> MemAddr {
+				if let MemCell::Forward(addr_to) = space_from[root_from] {
+					addr_to
+				} else {
+					let addr_to = space_to.len();
+					space_to.push( // Three card monte
+						std::mem::replace(&mut space_from[root_from], MemCell::Forward(addr_to))
+					);
+					todo.push_back(addr_to);
+					addr_to
+				}
+			}
+			fn forward_all(space_from: &mut MemSpace, space_to: &mut MemSpace, root:MemAddr) -> MemAddr {
+				let mut todo:VecDeque<MemAddr> = Default::default();
+				let root = forward_one(space_from, space_to, root, &mut todo);
+				while let Some(addr_to) = todo.pop_front() {
+					// TODO: "Pop out" the value instead of pulling it from todo
+					match &mut space_to[addr_to] {
+				        MemCell::Primitive(_) => (),
+				        MemCell::Quote(addr) =>
+				        	*addr = forward_one(space_from, space_to, *addr, &mut todo),
+				        MemCell::Array(vec) => {
+				        	for addr in vec {
+				        		*addr = forward_one(space_from, space_to, *addr, &mut todo);
+				        	}
+				        }
+				        MemCell::Dict(hash_map) => {
+				        	for addr in hash_map.values_mut() {
+				        		*addr = forward_one(space_from, space_to, *addr, &mut todo);
+				        	}
+				        }
+				        MemCell::Forward(_) => panic!("Interpreter internal error during GC"),
+				    }
+				}
+				root
+			}
+
+			{
+				let (space_from, space_to) = {
+					let (zero, one) = self.spaces.split_at_mut(1);
+					if self.space_parity {
+						(&mut one[0], &mut zero[0])
+					} else {
+						(&mut zero[0], &mut one[0])
+					}
+				};
+				let handles = &mut self.handle_table.borrow_mut().handles;
+				for handle in handles {
+					if let Some(addr) = handle { // FIXME: Truncate nones at end, that's silly
+						*addr = forward_all(space_from, space_to, *addr);
+					}
+				}
+			}
+
+			self.space_mut().truncate(0); // Current space is now empty
+			self.space_parity = !self.space_parity; // Flip spaces
 		}
 		let top = self.space_top();
 		self.spaces[self.space_parity as usize].push(data);

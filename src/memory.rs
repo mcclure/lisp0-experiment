@@ -102,6 +102,18 @@ pub struct MemHandleImpl {
 	parent: Weak<MemHandleTableCell<MemHandleTable>>
 }
 
+impl Drop for MemHandleImpl {
+	fn drop(&mut self) {
+		let table_option = &mut self.parent.upgrade();
+		if let Some(table) = table_option {
+			let idx = self.idx;
+			let mut table = table.borrow_mut();
+			table.handles[idx] = None;
+			table.free.push_back(idx)
+		}
+    }
+}
+
 pub type MemHandle = Rc<MemHandleImpl>;
 
 pub struct Memory {
@@ -218,11 +230,12 @@ impl Memory {
 					.min(self.gc_size_limit);
 				space_to.reserve_exact(new_capacity); // TODO: Assert space_to.len() is zero?
 
+				let handles = &mut self.handle_table.borrow_mut().handles;
+
 				#[cfg(feature = "debug-gc")]
-				eprintln!("** DEBUG-GC: Beginning GC. Capacity: {capacity} New capacity: {new_capacity}");
+				eprintln!("** DEBUG-GC: Beginning GC. Capacity: {capacity} New capacity: {new_capacity} Handles: {}", handles.len());
 
 				// COLLECT
-				let handles = &mut self.handle_table.borrow_mut().handles;
 				for handle in handles {
 					if let Some(addr) = handle { // FIXME: Truncate nones at end, that's silly
 						*addr = forward_all(space_from, space_to, *addr);

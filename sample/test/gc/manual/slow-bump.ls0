@@ -1,0 +1,23 @@
+# TODO: Convert this to .l0
+
+(set 'root (make-array))
+(set 'last root)
+
+(set 'recurse '(
+	# Add a bit to the tree
+	(set 'temp1 (make-array))
+	(push root temp1)
+	(push last temp1)
+
+	# Make some garbage
+	(set 'temp2 (make-array))
+	(set 'temp2 (make-array))
+	(set 'temp2 (make-array))
+	(set 'temp2 (make-array))
+
+	(set 'last temp1)
+
+	(recurse)
+))
+
+(recurse)

@@ -10,7 +10,12 @@ use std::rc::{Rc, Weak};
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 
-const STARTING_SIZE:usize = 1024*1024;
+const MB:usize = 1024*1024;
+const GB:usize = MB*1024;
+const STARTING_SIZE:usize = MB;
+const BUMP_OVER_OCCUPANCY:f32 = 0.5; // TODO: Make tunable?
+const INFLECTION_SIZE:usize = GB;    // Size over which we start doubling and switch to incrementing. TODO: Make tunable?
+const DEFAULT_LIMIT:usize = 4*GB;
 
 type MemAddr = usize;
 
@@ -103,7 +108,10 @@ pub struct Memory {
 	spaces: [MemSpace;2], // Current space, space to collect into
 	space_parity:bool,    // Use as index to "spaces" for current space
 	handle_table:Rc<MemHandleTableCell<MemHandleTable>>, // Dispense handles from here
-	pub globals: MemHandle    // "Root"
+	pub globals: MemHandle,    // "Root"
+
+	pub gc_size_limit:usize,
+	gc_last_occupancy:f32
 }
 
 impl Memory {
@@ -122,7 +130,10 @@ impl Memory {
 			],
 			space_parity:false,
 			handle_table,
-			globals
+			globals,
+
+			gc_size_limit:DEFAULT_LIMIT,
+			gc_last_occupancy:0.
 		}
 	}
 
@@ -135,10 +146,21 @@ impl Memory {
 	}
 
 	fn alloc_internal(&mut self, data: MemCell) -> MemAddr {
-		if self.space_top() >= self.spaces[self.space_parity as usize].capacity() {
-			// COLLECT
+		let capacity = self.spaces[self.space_parity as usize].capacity();
+		if self.space_top() >= capacity {
+			type Todo = VecDeque<MemCell>;
 
-			type Todo = VecDeque<(MemAddr, MemCell)>;
+			fn desired_capacity(old_capacity:usize, last_occupancy:f32) -> usize {
+				if last_occupancy > BUMP_OVER_OCCUPANCY { // TODO: literally cap somewhere?
+					if old_capacity < INFLECTION_SIZE {
+						old_capacity*2
+					} else {
+						old_capacity+GB
+					}
+				} else {
+					old_capacity
+				}
+			}
 
 			// For forward_ method, input is index in FROM, output is index in TO
 			fn forward_one(space_from: &mut MemSpace, space_to: &mut MemSpace, root_from:MemAddr, todo:&mut Todo) -> MemAddr {
@@ -152,14 +174,14 @@ impl Memory {
 					// plus the current queue size. This can be improved later by writing a custom Vec.
 					let addr_to = space_to.len() + todo.len();
 					let cell = std::mem::replace(&mut space_from[root_from], MemCell::Forward(addr_to));
-					todo.push_back((addr_to, cell));
+					todo.push_back(cell);
 					addr_to
 				}
 			}
 			fn forward_all(space_from: &mut MemSpace, space_to: &mut MemSpace, root:MemAddr) -> MemAddr {
 				let mut todo: Todo = Default::default();
 				let root = forward_one(space_from, space_to, root, &mut todo);
-				while let Some((addr_to, mut cell)) = todo.pop_front() {
+				while let Some(mut cell) = todo.pop_front() {
 					// TODO: "Pop out" the value instead of pulling it from todo
 					match &mut cell {
 				        MemCell::Primitive(_) => (),
@@ -191,12 +213,31 @@ impl Memory {
 						(&mut zero[0], &mut one[0])
 					}
 				};
+
+				let new_capacity = desired_capacity(capacity, self.gc_last_occupancy)
+					.min(self.gc_size_limit);
+				space_to.reserve_exact(new_capacity); // TODO: Assert space_to.len() is zero?
+
+				#[cfg(feature = "debug-gc")]
+				eprintln!("** DEBUG-GC: Beginning GC. Capacity: {capacity} New capacity: {new_capacity}");
+
+				// COLLECT
 				let handles = &mut self.handle_table.borrow_mut().handles;
 				for handle in handles {
 					if let Some(addr) = handle { // FIXME: Truncate nones at end, that's silly
 						*addr = forward_all(space_from, space_to, *addr);
 					}
 				}
+
+				if space_to.len() >= new_capacity {
+					panic!("Memory 100% full even after GC. Bailing"); // TODO return error?
+				}
+
+				// TODO: Assert space_to.len() is new_capacity?
+				self.gc_last_occupancy = space_to.len() as f32 / new_capacity as f32;
+
+				#[cfg(feature = "debug-gc")]
+				eprintln!("** DEBUG-GC: Finished GC. Occupancy: {}", self.gc_last_occupancy); // TODO: Time?
 			}
 
 			self.space_mut().truncate(0); // Current space is now empty

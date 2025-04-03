@@ -7,3 +7,6 @@ edition = "2021"
 anyhow = "1.0.95"
 char_reader = "0.1.1"
 clap = { version = "4.0.*" , features = ["derive"] }
+
+[features]
+debug-gc=[] # Print *** messages when GC occurs

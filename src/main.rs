@@ -25,8 +25,10 @@ fn main() -> anyhow::Result<()> {
         disable_fs: bool,
         #[arg(long="debug-ast", help="(Internal debug) Show reader output")]
         debug_ast: bool,
-        #[arg(long="debug-mem-size", help="(Internal debug) Set initial GC space size", default_value_t=0, hide_default_value=true)]
-        debug_mem_size: usize,
+        #[arg(long="debug-mem-initial", help="(Internal debug) Set initial GC space size", default_value_t=0, hide_default_value=true)]
+        debug_mem_initial: usize,
+        #[arg(long="debug-mem-limit", help="(Internal debug) Set max GC space size", default_value_t=0, hide_default_value=true)]
+        debug_mem_limit: usize,
         filepath: Option<PathBuf>,
         #[clap(last=true, num_args = 0..)]
         pub args: Vec<String>,
@@ -48,11 +50,14 @@ fn main() -> anyhow::Result<()> {
 
             Ok(())
         } else {
-            let mut memory = if cli.debug_mem_size > 0 {
-                crate::memory::Memory::new_sized(cli.debug_mem_size)
+            let mut memory = if cli.debug_mem_initial > 0 {
+                crate::memory::Memory::new_sized(cli.debug_mem_initial)
             } else {
                 crate::memory::Memory::new()
             };
+            if cli.debug_mem_limit > 0 {
+                memory.gc_size_limit = cli.debug_mem_limit;
+            }
 
             crate::globals::populate(&mut memory, &cli.args);
 

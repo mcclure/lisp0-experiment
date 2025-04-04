@@ -9,7 +9,8 @@ a # comment
     g
     h \ # comment
     i
-    (j \
+    # Spaces after backslash
+    (j \   
     )
     ( \
     k

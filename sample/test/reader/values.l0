@@ -1,4 +1,5 @@
 # Non-identifier types
+# Arg: --debug-ast
 # Expect: (("a"), ('"b"), ('"c"), (13), (''"d"), ('''"e"), ('("f", ''("g"))), (-1), ("-x"), ('-3))
 
 a

@@ -25,6 +25,7 @@ enum QuoteState {
 	Normal,
 	Raw,
 	Backslash, // Last char was backslash
+	BackslashSeekingNewline, // Last char was backslash followed by whitespace
 	BackslashNewline // In backslash newline chomp
 }
 
@@ -373,6 +374,8 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 						QuoteState::Normal | QuoteState::Raw => {
 							if is_newline {
 					    		return Err(Error {at, tag, message:format!("Newline inside string")})  // TODO: Sanitize ch printout
+				    		} else if quote_state == QuoteState::Normal && ch == '\\' {
+				    			state = ReadState::Quote(QuoteState::Backslash)
 				    		} else {
 				    			if closed() {
 						    		state = ReadState::Scan(false);
@@ -393,8 +396,24 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 									'n' => append = Some('\n'),
 									'\\' => append = Some('\\'),
 									'\"' => append = Some('"'),
-									_ => return Err(Error {at, tag, message:format!("Unrecognized backslash sequence \\{}", ch)})
+									_ => {
+										if is_whitespace(ch) {
+											state = ReadState::Quote(QuoteState::BackslashSeekingNewline);
+										} else {
+											return Err(Error {at, tag, message:format!("Unrecognized backslash sequence \\{}", ch)})
+										}
+									}
 								}
+								if append.is_some() {
+									state = ReadState::Quote(QuoteState::Normal);
+								}
+							}
+						}
+						QuoteState::BackslashSeekingNewline => {
+							if is_newline {
+								state = ReadState::Quote(QuoteState::BackslashNewline);
+							} else if !is_whitespace(ch) {
+								return Err(Error {at, tag, message:format!("Unrecognized backslash sequence: whitespace followed by {}", ch)})
 							}
 						}
 						QuoteState::BackslashNewline => {

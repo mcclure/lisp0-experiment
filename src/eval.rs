@@ -54,6 +54,13 @@ impl Eval {
 			}
 		}
 
+		// Oddball cases: Empty program, empty stack
+		if let Some((_, _, fun, _, _)) = self.stack.last() {
+			if 0 == self.memory.array_len(fun.clone()) {
+				return Ok(())
+			}
+		} else { panic!("Can't call eval() twice on one Eval"); }
+
 		// stack will grow and shrink freely as program runs; when the stack's empty we're done.
 		'eval: loop {
 			let next = if let Some((_, _, fun, line_num, prepare)) = self.stack.last_mut() {
@@ -62,7 +69,9 @@ impl Eval {
 
 				// Now unpack the current line within that function
 				let (line, line_len) = if let Some(line_num) = line_num { // We are executing a normal multiline function
-					if fun_len == 0 { return Err(Error {message:format!("Executing empty function")}) } // Isn't doing this every time slow :/
+					if fun_len == 0 { // Isn't doing this every time slow :/
+						return Err(Error {message:format!("Executing empty function")}) 
+					}
 
 					let line = self.memory.array_get(fun.clone(), *line_num).expect("Interpreter internal error");
 					(line.clone(), self.memory.array_len(line))

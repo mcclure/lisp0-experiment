@@ -1,4 +1,3 @@
 # Expect failure
 
-a \ b
-c
+"\ f"

@@ -7,6 +7,12 @@ reader/lisp/blank.ls0
 reader/lisp/values.ls0
 reader/lisp/structure.ls0
 
+reader/fail/unbalance.l0
+reader/fail/backspace-junk.l0
+reader/fail/multiline-string.l0
+reader/fail/quote-backslash-junk.l0
+reader/fail/nbsp.l0
+
 basic/lisp/math.ls0
 basic/lisp/fun.ls0
 basic/lisp/dict.ls0

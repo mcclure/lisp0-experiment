@@ -175,7 +175,7 @@ impl Memory {
 			}
 
 			// For forward_ method, input is index in FROM, output is index in TO
-			fn forward_one(space_from: &mut MemSpace, space_to: &mut MemSpace, root_from:MemAddr, todo:&mut Todo) -> MemAddr {
+			fn forward_one(space_from: &mut MemSpace, space_to: &mut MemSpace, root_from:MemAddr, todo:&mut Todo, offset_one:bool) -> MemAddr {
 				if let MemCell::Forward(addr_to) = space_from[root_from] {
 					addr_to
 				} else {
@@ -184,7 +184,8 @@ impl Memory {
 					// space_to will lock and we won't be able to push to it while walking. So we put the
 					// cell itself in the todo list, and assume the place we'll land is the current len
 					// plus the current queue size. This can be improved later by writing a custom Vec.
-					let addr_to = space_to.len() + todo.len();
+					// offset_one is because roots have an unusual relationship to the todo queue
+					let addr_to = space_to.len() + todo.len() + offset_one as usize;
 					let cell = std::mem::replace(&mut space_from[root_from], MemCell::Forward(addr_to));
 					todo.push_back(cell);
 					addr_to
@@ -192,21 +193,21 @@ impl Memory {
 			}
 			fn forward_all(space_from: &mut MemSpace, space_to: &mut MemSpace, root:MemAddr) -> MemAddr {
 				let mut todo: Todo = Default::default();
-				let root = forward_one(space_from, space_to, root, &mut todo);
+				let root = forward_one(space_from, space_to, root, &mut todo, false);
 				while let Some(mut cell) = todo.pop_front() {
 					// TODO: "Pop out" the value instead of pulling it from todo
-					match &mut cell {
+					match &mut cell { // Follow links
 				        MemCell::Primitive(_) => (),
 				        MemCell::Quote(addr) =>
-				        	*addr = forward_one(space_from, space_to, *addr, &mut todo),
+				        	*addr = forward_one(space_from, space_to, *addr, &mut todo, true),
 				        MemCell::Array(vec) => {
 				        	for addr in vec {
-				        		*addr = forward_one(space_from, space_to, *addr, &mut todo);
+				        		*addr = forward_one(space_from, space_to, *addr, &mut todo, true);
 				        	}
 				        }
 				        MemCell::Dict(hash_map) => {
 				        	for addr in hash_map.values_mut() {
-				        		*addr = forward_one(space_from, space_to, *addr, &mut todo);
+				        		*addr = forward_one(space_from, space_to, *addr, &mut todo, true);
 				        	}
 				        }
 				        MemCell::Forward(_) => panic!("Interpreter internal error during GC"),

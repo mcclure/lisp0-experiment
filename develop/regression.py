@@ -71,12 +71,13 @@ help += "-i [path]   # Use custom language interpreter (implies --no-build)\n"
 help += "-r [path]   # Use custom cargo (when building)\n"
 help += "--debug     # Run debug, not release, Rust builds\n"
 help += "--no-build  # Skip cargo build step\n"
+help += "--feature   # Add a cargo feature\n"
 help += "--untested  # Check repo hygiene-- list tests in sample/test not tested"
 
 parser = optparse.OptionParser(usage=help)
 for a in ["a", "A", "v", "V", "-debug", "-untested", "-no-build"]: # Single letter args, flags
     parser.add_option("-"+a, action="store_true")
-for a in ["f", "t", "d", "i", "r", "-root"]: # Long args with arguments
+for a in ["f", "t", "d", "i", "r", "-root", "-feature"]: # Long args with arguments
     parser.add_option("-"+a, action="append")
 
 (options, cmds) = parser.parse_args()
@@ -411,6 +412,9 @@ class CargoRunner(BaseRunner):
         if not s.cargoinvoke:
             s.cargoinvoke = stdcargoexe
         s.cargoinvoke += stdcargoargs[debugidx]
+        feature = flag("feature")
+        if feature:
+            s.cargoinvoke += ["--features", ",".join(feature)]
 
         s.interpreterinvoke = flag('i')
         if not s.interpreterinvoke:

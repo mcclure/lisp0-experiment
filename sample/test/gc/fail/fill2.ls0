@@ -1,6 +1,7 @@
 # TODO: Convert this to .l0
+# TODO: Convert this to .l0
 # Arg: --debug-mem-initial=1024
-# Arg: --debug-mem-limit=1024
+# Arg: --debug-mem-limit=2048
 # Expect failure
 
 (set 'root (make-array))

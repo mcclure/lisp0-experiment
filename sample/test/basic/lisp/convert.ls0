@@ -1,0 +1,21 @@
+# Expect: [nil] [true] [true] [true]
+# Expect: 0 1 3 7 [nil]
+# Expect: [nil][true] 34 xyz [array]
+
+# Note: This is highly abbreviated compared to math.ls0
+
+(print (to-bool nil) sp
+	   (to-bool true) sp
+	   (to-bool 3) sp
+	   (to-bool (make-array)) ln)
+
+(print (to-int nil) sp
+	   (to-int true) sp
+	   (to-int 3) sp
+	   (+ (to-int "3") (to-int "4")) sp
+	   (to-int "3g") ln)
+
+(print (+ (to-string nil) (to-string true)) sp
+	   (+ (to-string 3) (to-string 4)) sp
+	   (to-string 'xyz) sp
+	   (to-string (make-array)) ln)

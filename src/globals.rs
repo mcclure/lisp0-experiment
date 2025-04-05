@@ -286,6 +286,47 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 	insert_equality!("=", false);
 	insert_equality!("!=", true); // FIXME: This is confusing because they all compare against #1.
 
+	// --- Conversion ---
+
+	insert(memory, "to-bool", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:format!("Expected exactly one argument to `to-bool`")});
+		}
+		let value = match eval.memory.value(args[0].clone()) {
+			// v @ Value::Primitive(Primitive::Nil) => v // Bring back if cells can ever change
+			Value::Primitive(Primitive::Nil) | Value::Primitive(Primitive::True) =>
+				return Ok(Some(args[0].clone())), // Passthrough
+			_ => Value::Primitive(Primitive::True)
+		};
+		Ok(Some(eval.memory.value_new(value)))
+	}));
+
+	insert(memory, "to-int", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:format!("Expected exactly one argument to `to-int`")});
+		}
+		let value = match eval.memory.value(args[0].clone()) {
+		    Value::Primitive(Primitive::Nil) => Some(0),
+		    Value::Primitive(Primitive::True) => Some(1),
+		    //Value::Primitive(Primitive::Int(i)) => Some(i),
+		    Value::Primitive(Primitive::Int(_)) => return Ok(Some(args[0].clone())), // Passthrough
+		    Value::Primitive(Primitive::String(s)) => s.parse().ok(),
+			v @ _ => return Err(Error {message:format!("First argument to `to-int` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		};
+		Ok(value.map(|v|eval.memory.value_new(Value::Primitive(Primitive::Int(v)))))
+	}));
+
+	insert(memory, "to-string", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:format!("Expected exactly one argument to `to-int`")});
+		}
+		let value = match eval.memory.value(args[0].clone()) {
+		    Value::Primitive(Primitive::String(_)) => return Ok(Some(args[0].clone())),
+		    v @ _ => format!("{}", v)
+		};
+		Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::String(value)))))
+	}));
+
 	// --- Data ---
 
 	insert(memory, "make-array", Primitive::Builtin(|eval, args| {
@@ -428,8 +469,8 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 	}));
 
 	insert(memory, "del", Primitive::Builtin(|eval, args| {
-		if args.len() < 2 {
-			return Err(Error {message:format!("Too few args to `del`")});
+		if args.len() != 2 {
+			return Err(Error {message:format!("`del` expects exactly one argument")});
 		}
 		match eval.memory.value(args[0].clone()) {
 			// TODO: Support lots of other things
@@ -447,6 +488,26 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		Ok(None)
 	}));
 
+	insert(memory, "keys", Primitive::Builtin(|eval, args| {
+		if args.len() > 1 {
+			return Err(Error {message:format!("Too many args to `del`")});
+		}
+		let dict = if args.len() == 1 {
+			match eval.memory.value(args[0].clone()) {
+				// TODO: Support lots of other things
+				Value::Dict => {
+					args[0].clone()
+				}
+				// TODO: Value::Dict, Value::Array, local
+				v @ _ => return Err(Error {message:format!("First argument to `keys` unrecognized: {:?}", v)}) // TODO: Display not Debug
+			}
+		} else {
+			eval.memory.globals.clone()
+		};
+		let keys:Vec<MemHandle> = eval.memory.dict_keys(dict).into_iter().map(|x|eval.memory.value_new(Value::Primitive(x))).collect();
+		let handle = eval.memory.array_from_handles(&keys);
+		Ok(Some(handle))
+	}));
 
 	// --- File ---
 

@@ -499,4 +499,10 @@ impl Memory {
 		let MemCell::Dict(dict) = cell else { panic!("Expected dict") };
 		dict.remove(&key);
 	}
+
+	pub fn dict_keys(&mut self, handle: MemHandle) -> Vec<Primitive> {
+		let cell = self.cell_mut(handle);
+		let MemCell::Dict(dict) = cell else { panic!("Expected dict") };
+		dict.keys().map(|x|x.clone()).collect()
+	}
 }

@@ -22,3 +22,7 @@ pub fn ast_to_string(node:&reader::AstNode) -> String {
 		}
 	}
 }
+
+pub fn is_lisp_filename(s:&str) -> bool {
+	s.ends_with(".ls0") // FIXME: allow ".cl" or some other things?
+}

@@ -1,0 +1,4 @@
+# Write l0 in LISP mode
+# Expect failure
+
+print 34

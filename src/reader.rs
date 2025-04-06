@@ -20,6 +20,7 @@ struct ReaderPosition {
 	column:u32 // 1-indexed
 }
 
+// Special substate of Quote
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum QuoteState {
 	Normal,
@@ -38,6 +39,34 @@ enum ReadState { // FIXME: Could this be merged with the "ReadFrame" below?
 	Identifier,
 	Number,
 	Quote(QuoteState) // is_raw, is_escaped
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum GroupLineState {
+	Normal,
+	Comma, // Same as Normal, but track differently for clearer message on stray comma.
+	Line
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum GroupKind { // What parenthesis closes this group?
+	None, // Can occur for quote (important) or non-Scan (unimportant) frames
+	File(GroupLineState),  // "Toplevel"
+	Round,
+	Curly(GroupLineState), // True if "line" has started
+	Square(GroupLineState) // True if last comma
+}
+
+#[derive(Debug)]
+struct StackFrame {
+	node: AstNode,    // Building
+	group: GroupKind, // For parenthesis matching, line interpretation
+}
+
+impl StackFrame {
+	fn new(node: AstNode, group: GroupKind) -> Self {
+		Self { node, group }
+	}
 }
 
 #[derive(Debug)]
@@ -149,10 +178,10 @@ fn die() -> ! {
 }
 
 // Merge 1 layer of the stack upward.
-fn peel(stack: &mut Vec<AstNode>) {
+fn peel(stack: &mut Vec<StackFrame>) {
 	loop {
-		let top = stack.pop().unwrap();
-		let into = &mut stack.last_mut().unwrap().content;
+		let top = stack.pop().unwrap().node;
+		let into = &mut stack.last_mut().unwrap().node.content;
 		match into {
 			AstContent::Quote(bx) => {
 				**bx = top;
@@ -167,9 +196,9 @@ fn peel(stack: &mut Vec<AstNode>) {
 }
 
 // Take input as well as a string identifying the source (such as a filename)
-pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) -> Result<Output, Error> {
+pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, lisp:bool) -> Result<Output, Error> {
 	let mut state = ReadState::Scan(true);
-	let mut stack: Vec<AstNode> = Default::default();
+	let mut stack: Vec<StackFrame> = Default::default();
 	const NO_POSITION: ReaderPosition = ReaderPosition{source:0, line:0, column:0};
 	const PLACEHOLDER:AstNode =  AstNode { at:NO_POSITION, content:AstContent::Nil };
 	let mut source = AstNode { at:NO_POSITION, content:AstContent::Group(Default::default())};
@@ -177,7 +206,8 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 	let mut last_cr = false; // For merging \r\n
 	let illegal = &*illegal_chars;
 
-	stack.push(source);
+	// Create initial "toplevel" group
+	stack.push(StackFrame::new(source, GroupKind::File(GroupLineState::Normal)));
 
 	while let Ok(Some(ch)) = chars.next_char() {
 		// BOM
@@ -193,14 +223,59 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			last_cr = false;
 			continue; // Do NOTHING, not even increment line counters
 		}
+		let is_comma = ch == ',';
 
 		if TRACE_DEBUG { eprintln!("Parsing: `{ch}`"); }
 		// Always aborts after one iteration, but is loop to allow continue
 		// "break" for "finish character", "continue" for "retry character"
 		'process: loop {
-			if TRACE_DEBUG { eprintln!("\tState: {:?} Depth: {}", state.clone(), stack.len()); }
+			if TRACE_DEBUG {
+				let Some(StackFrame{group,..}) = stack.last() else { die(); };
+				eprintln!("\tDepth: {} State: {:?} Group: {:?}", stack.len(), state.clone(), group);
+			}
 			match state.clone() {
 			    ReadState::Scan(_) => { // "Normal"
+			    	// Before anything, handle EOL in ls0 mode.
+			    	// Logic is: If following symbol, close group; if whitespace before symbol, ignore;
+			    	// if comma before symbol (or anything in ()), error.
+					if !lisp && (is_comma || is_newline) {
+						let Some(StackFrame{group,..}) = stack.last() else { die(); };
+						let group = group.clone();
+						match group {
+							GroupKind::Round => {
+								return Err(Error {at, tag, message:format!("{} currently not allowed in (). Use \\.", if is_comma {"Comma"} else {"Newline"})});
+							}
+							GroupKind::File(line_state) | GroupKind::Square(line_state) | GroupKind::Curly(line_state) => {
+								let is_line = line_state == GroupLineState::Line;
+								if is_comma && !is_line { // FIXME: Wierd to call [] braces?
+									return Err(Error {at, tag, message:format!("Unexpected comma {}", if line_state == GroupLineState::Comma {"after comma"} else {
+										match group { GroupKind::File(_) => "at start of file", GroupKind::Square(_) => "after brackets", GroupKind::Curly(_) => "after braces", _=>unreachable!() }
+									})});
+								}
+								if is_line {
+				    				peel(&mut stack); // End of line and line has content.
+
+									// Note shadowing of group, line_state here. Wow, a lot of lines of code dedicated to the comma error message here!
+									let Some(StackFrame{group,..}) = stack.last_mut() else { die(); };
+									match group {
+										GroupKind::File(line_state) | GroupKind::Curly(line_state) | GroupKind::Square(line_state) => {
+											*line_state = if is_comma {
+												GroupLineState::Comma
+											} else {
+												GroupLineState::Normal
+											}
+										},
+										_ => die() // GroupLineState::Line should only be a child of GroupLineState::Normal or GroupLineState::Comma.
+									}
+								}
+								break 'process;
+							}
+							GroupKind::None => () // Fall through and , will be illegal as below.
+						};
+					} else if lisp && is_comma {
+						return Err(Error {at, tag, message:"Please don't use commas in LISP mode".to_string()});
+					}
+
 			    	check_illegal(illegal, &at, &tag, ch)?;
 
 			    	if is_whitespace(ch) {
@@ -217,6 +292,28 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    		break 'process;
 			    	}
 
+			    	// If we are still here, the character we are interpreting has "substance".
+			    	// In other words, if we are in ls0 mode, thi sis potentially the start of a line.
+			    	if !lisp {
+						let Some(StackFrame{group,..}) = stack.last() else { die(); };
+						match *group {
+							GroupKind::File(line_state) | GroupKind::Curly(line_state) | GroupKind::Square(line_state) => {
+								if line_state != GroupLineState::Line { // A line can be started!
+									stack.push(StackFrame::new(
+						    			AstNode {at, content:AstContent::Group(Default::default())},
+						    			match *group { // Needs sugar
+						    				GroupKind::File(_) => GroupKind::File(GroupLineState::Line),
+						    				GroupKind::Curly(_) => GroupKind::Curly(GroupLineState::Line),
+						    				GroupKind::Square(_) => GroupKind::Square(GroupLineState::Line),
+						    				_ => unreachable!()
+						    			}
+						    		));
+								}
+							}
+							_ => () // Nothing to do
+						}
+					}
+
 			    	if ch == '-' {
 			    		state = ReadState::Minus(at);
 
@@ -224,7 +321,10 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	}
 
 			    	if ch == '\'' { // '
-				    	stack.push(AstNode {at,content:AstContent::Quote(Box::new(PLACEHOLDER))});
+				    	stack.push(StackFrame::new(
+				    		AstNode {at,content:AstContent::Quote(Box::new(PLACEHOLDER))},
+				    		GroupKind::None
+				    	));
 
 			    		break 'process;
 			    	}
@@ -232,7 +332,10 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	if is_num(ch) {
 			    		state = ReadState::Number;
 
-				    	stack.push(AstNode {at,content:AstContent::Int(0)});
+				    	stack.push(StackFrame::new(
+				    		AstNode {at,content:AstContent::Int(0)},
+				    		GroupKind::None
+				    	));
 
 			    		continue 'process;
 			    	}
@@ -247,21 +350,35 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    		});
 
 				    	//let Some(AstNode {content:AstContent::Group(v),..}) = stack.last();
-				    	stack.push(AstNode {at,content:AstContent::Quote(Box::new(PLACEHOLDER))});
-				    	stack.push(AstNode {at,content:AstContent::String("".to_string())});
+				    	stack.push(StackFrame::new(
+				    		AstNode {at,content:AstContent::Quote(Box::new(PLACEHOLDER))},
+				    		GroupKind::None
+				    	));
+				    	stack.push(StackFrame::new(
+				    		AstNode {at,content:AstContent::String("".to_string())},
+				    		GroupKind::None
+				    	));
 
 			    		break 'process;
 			    	}
 
 			    	// Close parens
 			    	if is_paren_close(ch) {
-			    		if stack.len() <= 1 {
-				    		return Err(Error {at, tag, message:format!("Unbalanced extra {} parenthesis", ch)});
-				    	} else {
-				    		peel(&mut stack);
-
-				    		break 'process;
+				    	let Some(StackFrame{group,..}) = stack.last() else { die(); };
+				    	match (group, ch) {
+				    		(GroupKind::Round, ')') => (),
+				    		(GroupKind::Curly(line_state), '}') | (GroupKind::Square(line_state), ']') => {
+				    			if *line_state == GroupLineState::Line {
+				    				peel(&mut stack);
+				    			}
+				    		}
+				    		_ => return Err(Error {at, tag, message:format!("Unbalanced extra {} parenthesis", ch)})
 				    	}
+
+
+			    		peel(&mut stack);
+
+			    		break 'process;
 			    	}
 
 			    	// Close parens
@@ -269,21 +386,38 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    		state = ReadState::Scan(false);
 
 			    		match ch {
-			    			'[' => {
-			    				return Err(Error {at, tag, message:format!("No [ support yet")});
-			    				stack.push(AstNode {at, content:AstContent::Group(vec![
-			    					AstNode {at, content:AstContent::String("map".to_string())},
-			    					AstNode {at, content:AstContent::String("eval".to_string())}
-			    				])})
+			    			'[' => { // (make-array ...)
+			    				if lisp {
+			    					return Err(Error {at, tag, message:format!("No [ support in lisp mode")});
+			    				}
+			    				stack.push(StackFrame::new(
+			    					AstNode {at, content:AstContent::Group(vec![
+			    						AstNode {at, content:AstContent::String("make-array".to_string())},
+			    					])},
+			    					GroupKind::Square(GroupLineState::Normal)
+			    				));
 			    			},
-			    			'{' => {
-			    				return Err(Error {at, tag, message:format!("No {{ support yet")});
-					    		stack.push(AstNode {at, content:AstContent::Quote(Box::new(PLACEHOLDER))}); // FIXME this box will be thrown away
-					    		stack.push(AstNode {at, content:AstContent::Group(Default::default())});
+			    			'{' => { // '((...))
+			    				if lisp {
+			    					return Err(Error {at, tag, message:format!("No [ support in lisp mode")});
+			    				}
+			    				stack.push(StackFrame::new(
+					    			AstNode {at, content:AstContent::Quote(Box::new(PLACEHOLDER))},
+					    			GroupKind::None
+					    		));
+					    		stack.push(StackFrame::new(
+					    			AstNode {at, content:AstContent::Group(Default::default())},
+					    			GroupKind::Curly(GroupLineState::Normal)
+					    		));
 			    			},
+			    			'(' => { // (...)
+			    				stack.push(StackFrame::new(
+					    			AstNode {at, content:AstContent::Group(Default::default())},
+					    			GroupKind::Round
+					    		));
+			    			}
 			    			_ => ()
 			    		}
-			    		stack.push(AstNode {at, content:AstContent::Group(Default::default())});
 
 			    		break 'process;
 			    	}
@@ -291,7 +425,10 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	// If we're still here, it must be a legal identifier character
 		    		state = ReadState::Identifier;
 
-			    	stack.push(AstNode {at,content:AstContent::String("".to_string())});
+			    	stack.push(StackFrame::new(
+			    		AstNode {at,content:AstContent::String("".to_string())},
+			    		GroupKind::None
+			    	));
 			    	continue 'process;
 			    },
 			    ReadState::Comment(in_backslash) => {
@@ -321,13 +458,19 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	if is_num(ch) { // It's a number
 			    		state = ReadState::Number;
 
-				    	stack.push(AstNode {at:node_at, content:AstContent::Int(-parse_num(ch))});
+				    	stack.push(StackFrame::new(
+				    		AstNode {at:node_at, content:AstContent::Int(-parse_num(ch))},
+				    		GroupKind::None
+				    	));
 
 				    	break 'process;
 			    	}
 
 			    	state = ReadState::Identifier; // It's not, and never was, a number
-			    	stack.push(AstNode {at:node_at,content:AstContent::String("-".to_string())});
+			    	stack.push(StackFrame::new(
+			    		AstNode {at:node_at,content:AstContent::String("-".to_string())},
+			    		GroupKind::None
+			    	));
 
 			    	continue 'process;
 			    }
@@ -335,7 +478,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    	check_illegal(illegal, &at, &tag, ch)?;
 
 			    	let is_white = is_whitespace(ch);
-			    	if is_white || is_paren_close(ch) {
+			    	if is_white || is_paren_close(ch) || is_comma {
 			    		state = ReadState::Scan(false);
 			    		peel(&mut stack);
 
@@ -351,14 +494,14 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 			    			return Err(Error {at, tag, message:format!("Illegal character for identifier: {}", ch)})  // TODO: Sanitize ch printout
 				    	}
 
-				    	let Some(AstNode {content:AstContent::String(ref mut s),..}) = stack.last_mut() else { die(); };
+				    	let Some(StackFrame{node:AstNode {content:AstContent::String(ref mut s),..},..}) = stack.last_mut() else { die(); };
 				    	s.push(ch);
 			    	} else { // Number
 				    	if !is_num(ch) {
 				    		return Err(Error {at, tag, message:format!("Illegal character for number: {}", ch)})  // TODO: Sanitize ch printout
 				    	}
 
-				    	let Some(AstNode {content:AstContent::Int(ref mut i),..}) = stack.last_mut() else { die(); };
+				    	let Some(StackFrame{node:AstNode {content:AstContent::Int(ref mut i),..},..}) = stack.last_mut() else { die(); };
 				    	let i2 = parse_num(ch);
 				    	*i *= 10;
 				    	*i += if *i >= 0 { i2 } else { -i2 };
@@ -425,7 +568,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 				    }
 
 				    if let Some(ch2) = append {
-				    	let Some(AstNode {content:AstContent::String(ref mut s),..}) = stack.last_mut() else { die(); };
+				    	let Some(StackFrame{node:AstNode {content:AstContent::String(ref mut s),..},..}) = stack.last_mut() else { die(); };
 			    		s.push(ch2);
 				    }
 			    },
@@ -439,17 +582,34 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 		last_cr = ch == '\r';
 	}
 
+	// Final unpeel: Destroy symbol-in-progress
 	if stack.len() > 1 {
-		let into = &mut stack.last_mut().unwrap().content;
+		let into = &stack.last_mut().unwrap().node.content;
 		match into {
 			AstContent::Group(_) => (),
+			AstContent::Quote(_) => {
+				return Err(Error {at, tag, message:format!("Stray ' at end of input")})
+			}
 			_ => {
 				if TRACE_DEBUG {
-					eprintln!("Extra peel");
+					eprintln!("Extra peel (word)");
 				}
 
 				peel(&mut stack);
 			}
+		}
+	}
+	if !lisp && stack.len() > 1 {
+		let into = &stack.last_mut().unwrap();
+		match into {
+			StackFrame { node:AstNode { content:AstContent::Group(_), .. }, group:GroupKind::File(_) } => {
+				if TRACE_DEBUG {
+					eprintln!("Extra peel (file end)");
+				}
+
+				peel(&mut stack);
+			}
+			_ => ()
 		}
 	}
 	if stack.len() > 1 {
@@ -461,6 +621,6 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String) 
 
 	Ok(Output {
 		source_tag: vec![tag],
-		source: stack.pop().unwrap()
+		source: stack.pop().unwrap().node
 	})
 }

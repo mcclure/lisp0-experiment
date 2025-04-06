@@ -1,11 +1,11 @@
 //! Turns unicode string iterator into parse tree
 
+// If EVERYTHING'S broken
+const TRACE_DEBUG:bool = false;
+
 use std::borrow::BorrowMut;
 use std::collections::HashSet;
 use std::fmt;
-
-// If EVERYTHING'S broken
-const TRACE_DEBUG:bool = false;
 
 type num = i64;
 

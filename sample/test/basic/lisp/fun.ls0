@@ -2,6 +2,13 @@
 # Check if functions are being called
 # Expect: 1 2
 # Expect: 3 4
+# Expect: A 1 m1
+# Expect: B 1 1 - 1 2
+# Expect: C 1 o1 | 1 o2
+# Expect: D 4 p1
+# Expect: 0 1
+# Expect: 2 3
+# Expect: 8 9
 
 # No args
 
@@ -19,37 +26,42 @@
 (do-print)
 
 # Args
-# TODO: len
+# TODO: Consider simplifying these
 
 (set 'print-arg0 '(
 	(print sp (len args) sp (get args 0))
 ))
 
+# Make sure to always test one call in and one out of tail recursion position
 (set 'print-arg0-wrap '(
 	(print-arg0 1)
+	(print sp "-")
+	(print-arg0 2)
 ))
 
 (set 'print-arg0-wrap-2 '(
+	(print-arg0 (get args 0))
+	(print sp "|")
 	(print-arg0 (get args 1))
 ))
 
-(print "args")
+(print "A")
 (print-arg0 'm1)
-(print-arg0-wrap 'n2 'n3)
-(print-arg0-wrap-2 'o4)
+(print ln "B")
+(print-arg0-wrap 'n1 'n2)
+(print ln "C")
+(print-arg0-wrap-2 'o1 'o2)
+(print ln "D")
 (print-arg0 'p1 'p2 'p3 'p4)
 (print ln)
 
-# Args -- complex
+# Args -- "higher order"
 
 (set 'print-minus '(
-	(print "in1" ln) # DEBUGGING-- REMOVE ME
 	(print (- (get args 0) 1) sp (- (get args 1) 1) ln)
-	(print "out1" ln) # DEBUGGING-- REMOVE ME
 ))
 
 (set 'pass-on-minus '(
-	(print "?? " (get args 0) sp (get args 1) sp (get args 2) ln) # DEBUGGING-- REMOVE ME
 	((get args 0) (- (get args 1) 1) (- (get args 2) 1))
 ))
 
@@ -65,4 +77,4 @@
 (pass-on-minus print-minus 4 5)
 
 # Test args restore after call...
-#(pass-on-minus print-minus 10 11)
+(pass-on-minus print-minus 10 11)

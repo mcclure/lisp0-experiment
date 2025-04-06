@@ -1,6 +1,9 @@
 //! Lisp evaluator
 // TODO: Arguments
 
+// If EVERYTHING'S broken
+const TRACE_DEBUG:bool = false;
+
 use crate::memory::{Memory, MemHandle, Primitive, Value};
 use std::fmt;
 
@@ -152,7 +155,7 @@ impl Eval {
 			    	let mut returned:Option<MemHandle> = None; // Will only be populated if returning
 
 			    	// The odd construction here is because one branch of this if "eats" args_restore
-			    	let args_restore = if returning {
+			    	let mut args_restore = if returning {
 			    		args_restore
 			    	} else {
 			    		// More lines to execute in this function! Should not have popped
@@ -186,8 +189,24 @@ impl Eval {
 				            // User defined
 							Value::Array => {
 								// The only complicated part here is juggling the args variable
-								let old_args = self.memory.dict_get(self.memory.globals.clone(), args_str!());
-								let old_args = old_args.unwrap_or_else(||self.memory.nil()); // This should be impossible currently
+								let old_args = if args_restore.is_none() {
+									// Normal case: Fetch the args variable out of memory
+									let old_args = self.memory.dict_get(self.memory.globals.clone(), args_str!());
+									old_args.unwrap_or_else(||self.memory.nil()) // Failing here should be impossible currently
+								} else {
+									// Tail recursion case: yoink the args var *this* stackframe was supposed to return
+									std::mem::take(&mut args_restore).unwrap()
+								};
+
+								if TRACE_DEBUG {
+									print!("[EVAL DESCEND carl {} cdrl {}: ", self.memory.array_len(car.clone()), cdr.len());
+									let mut first = false; for handle in cdr {
+										if !first { first = true; } else { print!(", ") }
+										print!("{}", self.memory.value(handle.clone()));
+									}
+									println!("]");
+								}
+
 								let args = self.memory.array_from_handles(cdr);
 								self.memory.dict_set(self.memory.globals.clone(), args_str!(), args);
 
@@ -204,6 +223,9 @@ impl Eval {
 
 			        // If we're returning and we realized above we need to juggle args, do that
 			        if let Some(args_restore) = args_restore {
+			        	if TRACE_DEBUG {
+							println!(" [ARGS ASCEND RESTORE c {}] ", self.memory.array_len(args_restore.clone()));
+						}
 				        self.memory.dict_set(self.memory.globals.clone(), args_str!(), args_restore.clone());
 				    }
 

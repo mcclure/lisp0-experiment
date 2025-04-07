@@ -582,6 +582,78 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		Ok(Some(handle))
 	}));
 
+	// --- inset/outset ---
+
+	insert(memory, "inset", Primitive::Builtin(|eval, args| {
+		let v: Vec<Value> = args.into_iter().map(|x|eval.memory.value(x.clone())).collect();
+		match *v {
+			[Value::Array, Value::Array] => {
+				let len = eval.memory.array_len(args[1].clone());
+				for idx in 0..len {
+					let handle = eval.memory.array_get(args[1].clone(), idx).unwrap();
+					match eval.memory.value(handle) {
+						Value::Primitive(p @ Primitive::String(_)) => {
+							let handle2 = eval.memory.array_get(args[0].clone(), idx).unwrap_or_else(||eval.memory.nil());
+							eval.memory.dict_set(eval.memory.globals.clone(), p, handle2);
+						}
+						_ =>
+							return Err(Error {message:format!("Argument 1 element {} to `inset` not recognized (wanted string)", idx)})
+					}
+				}
+			}
+/*
+			[Value::Dict, Value::Array] => {
+
+			}
+			[Value::Dict, Value::Array, Value::Array] => {
+
+			}
+			[Value::Dict, Value::Dict, Value::Array] => {
+
+			}
+*/
+			_ => return Err(Error {message:format!("Unrecognized arguments to `inset`")}) // TODO: Better errors
+		}
+		Ok(None)
+	}));
+
+	insert(memory, "outset", Primitive::Builtin(|eval, args| {
+		let v: Vec<Value> = args.into_iter().map(|x|eval.memory.value(x.clone())).collect();
+		match *v {
+			[Value::Array, Value::Array] => {
+				let (len0, len1) = (eval.memory.array_len(args[0].clone()), eval.memory.array_len(args[1].clone()));
+				for idx in 0..len1 {
+					let handle = eval.memory.array_get(args[1].clone(), idx).unwrap();
+					match eval.memory.value(handle) {
+						Value::Primitive(p @ Primitive::String(_)) => {
+							let handle2 = eval.memory.dict_get(eval.memory.globals.clone(), p).unwrap_or_else(||eval.memory.nil());
+							if idx < len0 {
+								eval.memory.array_set(args[0].clone(), idx, handle2);
+							} else {
+								eval.memory.array_push(args[0].clone(), handle2);
+							}
+						}
+						_ =>
+							return Err(Error {message:format!("Argument 1 element {} to `inset` not recognized (wanted string)", idx)})
+					}
+				}
+			}
+/*
+			[Value::Dict, Value::Array] => {
+
+			}
+			[Value::Dict, Value::Array, Value::Array] => {
+
+			}
+			[Value::Dict, Value::Dict, Value::Array] => {
+
+			}
+*/
+			_ => return Err(Error {message:format!("Unrecognized arguments to `inset`")}) // TODO: Better errors
+		}
+		Ok(None)
+	}));
+
 	// --- File ---
 
 	insert(memory, "file-allowed", Primitive::Builtin(|eval, _| {

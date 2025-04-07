@@ -1,0 +1,16 @@
+# test inset/outset sugar
+# Expect: k l m n
+# Expect: 4 n m l k [nil]
+
+set 'y (make-dict 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j)
+set 'z (make-array 'k 'l 'm 'n 'o 'p 'q 'r 's 't)
+
+inset z '(u v w x)
+
+print u sp v sp w sp x ln
+
+set 'zz (make-array "GLARG")
+
+outset zz '(x w v u)
+
+print (len zz) sp (get zz 0) sp (get zz 1) sp (get zz 2) sp (get zz 3) sp (get zz 4) ln 

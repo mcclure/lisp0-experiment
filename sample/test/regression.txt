@@ -20,6 +20,7 @@ basic/fun.l0
 basic/nil.l0
 basic/setprint.l0
 basic/math.l0
+basic/inset.l0
 
 reader/lisp/basic.ls0
 reader/lisp/quote.ls0

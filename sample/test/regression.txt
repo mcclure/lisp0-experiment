@@ -23,6 +23,7 @@ basic/math.l0
 basic/inset.l0
 
 reader/lisp/basic.ls0
+reader/lisp/empties.ls0
 reader/lisp/quote.ls0
 reader/lisp/blank.ls0
 reader/lisp/values.ls0

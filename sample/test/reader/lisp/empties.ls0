@@ -1,0 +1,13 @@
+# Empty groups
+# Arg: --debug-ast
+# Expect: (((), '(), ("make-array")))
+
+(
+
+()
+
+'()
+
+(make-array)
+
+)

@@ -233,6 +233,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 			if TRACE_DEBUG {
 				let Some(StackFrame{group,..}) = stack.last() else { die(); };
 				eprintln!("\tDepth: {} State: {:?} Group: {:?}", stack.len(), state.clone(), group);
+				eprintln!("{:?}", &stack);
 			}
 			match state.clone() {
 			    ReadState::Scan(_) => { // "Normal"

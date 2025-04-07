@@ -2,8 +2,6 @@
 # Expect: 0 1 3 7 [nil]
 # Expect: [nil][true] 34 xyz [array]
 
-# Note: This is highly abbreviated compared to math.ls0
-
 (print (to-bool nil) sp
 	   (to-bool true) sp
 	   (to-bool 3) sp

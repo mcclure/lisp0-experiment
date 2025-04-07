@@ -286,7 +286,44 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 	insert_equality!("=", false);
 	insert_equality!("!=", true); // FIXME: This is confusing because they all compare against #1.
 
-	// --- Conversion ---
+	// --- Conversion/types ---
+
+	macro_rules! insert_is {
+		($name:expr, $pattern:pat) => {
+			insert(memory, $name, Primitive::Builtin(|eval, args| {
+				if args.len() != 1 {
+					return Err(Error {message:format!("Expected exactly one argument to `{}`", $name)});
+				}
+				let value = match eval.memory.value(args[0].clone()) {
+					// v @ Value::Primitive(Primitive::Nil) => v // Bring back if cells can ever change
+					$pattern => true,
+					_ => false
+				};
+				return bool_to_handle(&mut eval.memory, value);
+			}));
+		}
+	}
+
+	insert_is!("is-int", Value::Primitive(Primitive::Int(_)));
+	insert_is!("is-string", Value::Primitive(Primitive::String(_)));
+	insert_is!("is-builtin", Value::Primitive(Primitive::Builtin(_)));
+	insert_is!("is-quote", Value::Quote);
+	insert_is!("is-array", Value::Array);
+	insert_is!("is-dict", Value::Dict);
+	insert_is!("is-bool", Value::Primitive(Primitive::Nil) | Value::Primitive(Primitive::True));
+	insert_is!("is-callable", Value::Array | Value::Primitive(Primitive::Builtin(_)));
+
+	insert(memory, "is-int", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:format!("Expected exactly one argument to `is-int`")});
+		}
+		let value = match eval.memory.value(args[0].clone()) {
+			// v @ Value::Primitive(Primitive::Nil) => v // Bring back if cells can ever change
+			Value::Primitive(Primitive::Int(_)) => true,
+			_ => false
+		};
+		return bool_to_handle(&mut eval.memory, value);
+	}));
 
 	insert(memory, "to-bool", Primitive::Builtin(|eval, args| {
 		if args.len() != 1 {

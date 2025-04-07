@@ -45,6 +45,7 @@ basic/lisp/array.ls0
 basic/lisp/string.ls0
 basic/lisp/get.ls0
 basic/lisp/convert.ls0
+basic/lisp/type-test.ls0
 
 basic/lisp/fail/no-parens.ls0
 

@@ -37,25 +37,41 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 					Err(Error {message:"Too many args to `set`".to_string()})
 				}
 			}
-			// TODO: Value::Dict, Value::Array, local
-			v @ _ => Err(Error {message:format!("First argument to `set` unrecognized: {:?}", v)}) // TODO: Display not Debug
-		}
-	}));
-
-	insert(memory, "get", Primitive::Builtin(|eval, args| {
-		if args.len() < 1 {
-			return Err(Error {message:"Too few args to `set`".to_string()});
-		}
-		match eval.memory.value(args[0].clone()) {
-			// Get variable from scope.
-			Value::Primitive(v @ Primitive::String(_)) => {
-				if args.len() == 1 {
-					eval.memory.dict_get(eval.memory.globals.clone(), v);
+			Value::Quote => {
+				if args.len() == 2 {
+					eval.memory.quote_set(args[0].clone(), args[1].clone());
 					Ok(None)
 				} else {
 					Err(Error {message:"Too many args to `set`".to_string()})
 				}
 			}
+			Value::Array => {
+				if args.len() == 3 {
+					match eval.memory.value(args[1].clone()) {
+						Value::Primitive(Primitive::Int(i)) => {
+							eval.memory.array_set(args[0].clone(), i as usize, args[2].clone());
+							Ok(None)
+						}
+						_ => Err(Error {message:"Index in array `set` not an integer".to_string()})
+					}
+				} else {
+					Err(Error {message:"`set` on array expects exactly 3 arguments".to_string()})
+				}
+			}
+			Value::Dict => {
+				if args.len() == 3 {
+					match eval.memory.value(args[1].clone()) {
+						Value::Primitive(p) => {
+							eval.memory.dict_set(args[0].clone(), p, args[2].clone());
+							Ok(None)
+						}
+						_ => Err(Error {message:"Index in dict `set` not a primitive".to_string()})
+					}
+				} else {
+					Err(Error {message:"`set` on dict expects exactly 3 arguments".to_string()})
+				}
+			}
+
 			// TODO: Value::Dict, Value::Array, local
 			v @ _ => Err(Error {message:format!("First argument to `set` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		}
@@ -388,6 +404,26 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 			}
 		}
 		Ok(Some(dict))
+	}));
+
+	insert(memory, "make-quote", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:"Expected exactly one argument to `make-quote`".to_string()});
+		}
+		Ok(Some(eval.memory.quote_new(args[0].clone())))
+	}));
+
+	insert(memory, "unquote", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:"Expected exactly one argument to `quote`".to_string()});
+		}
+		match eval.memory.value(args[0].clone()) {
+			// Get variable from scope.
+			Value::Quote => {
+				Ok(Some(eval.memory.quote_get(args[0].clone())))
+			}
+			v @ _ => Err(Error {message:format!("First argument to `unquote` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		}
 	}));
 
 	insert(memory, "len", Primitive::Builtin(|eval, args| {

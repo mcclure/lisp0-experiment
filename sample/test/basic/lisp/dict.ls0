@@ -1,9 +1,14 @@
 # List operators
 # Expect: 0 2 2
 # Expect: [nil] d [nil] f
+# Expect: [nil] d [nil] g
 
 (set 'a (make-dict))
 (set 'b (make-dict 'c 'd 'e 'f))
 
 (print (len a) sp (len b) sp (len (keys b)) ln)
+(print (get a 'c) sp (get b 'c) sp (get b 'd) sp (get b 'e) ln)
+
+(set b 'e 'g)
+
 (print (get a 'c) sp (get b 'c) sp (get b 'd) sp (get b 'e) ln)

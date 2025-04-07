@@ -361,7 +361,13 @@ impl Memory {
 		self.handle_new(addr)
 	}
 
-	pub fn quote_new(&mut self, value:Value) -> MemHandle {
+	pub fn quote_new(&mut self, handle:MemHandle) -> MemHandle {
+		let inner_addr = self.handle_to_addr(handle);
+		let addr = self.alloc_internal(MemCell::Quote(inner_addr));
+		self.handle_new(addr)
+	}
+
+	pub fn quote_new_value(&mut self, value:Value) -> MemHandle {
 		let cell = self.value_to_cell_internal(value);
 		let inner_addr = self.alloc_internal(cell);
 		let addr = self.alloc_internal(MemCell::Quote(inner_addr));
@@ -374,7 +380,14 @@ impl Memory {
 		self.handle_new(*addr)
 	}
 
-	pub fn quote_set(&mut self, handle:MemHandle, value:Value) {
+	pub fn quote_set(&mut self, handle:MemHandle, handle2:MemHandle) {
+		let addr2 = self.handle_to_addr(handle2);
+		let cell = self.cell_mut(handle);
+		let MemCell::Quote(addr) = cell else { panic!("Expected quote") };
+		*addr = addr2;
+	}
+
+	pub fn quote_set_value(&mut self, handle:MemHandle, value:Value) {
 		let cell2 = self.value_to_cell_internal(value);
 		let addr2 = self.alloc_internal(cell2);
 		let cell = self.cell_mut(handle);

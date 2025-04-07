@@ -2,6 +2,7 @@
 # Expect: 0 3
 # Expect: 1 f [true] [nil]
 # Expect: 5 g h [true] [nil]
+# Expect: 5 i h [true] [nil]
 
 (set 'a (make-array))
 (set 'b (make-array 'c 'd 'e))
@@ -12,4 +13,8 @@
 (push b 'g 'h)
 
 (print (len a) sp (get a 0) sp (has a 0) sp (has a 1) ln)
+(print (len b) sp (get b 3) sp (get b 4) sp (has b 4) sp (has b 5) ln)
+
+(set b 3 'i)
+
 (print (len b) sp (get b 3) sp (get b 4) sp (has b 4) sp (has b 5) ln)

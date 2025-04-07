@@ -1,0 +1,20 @@
+# This funny thing wound up in the language half by accident but it winds up being useful as an option or a box
+# Expect: [true] [true] [true]
+# Expect: [nil] [nil] [nil] [quote]
+# Expect: [true] 3 3 [true] [true]
+# Expect: [nil] [true] 3 4
+
+(set 'a ''()) # Quote of list
+(set 'b (make-quote 3)) # Quote of int
+(set 'c (make-quote (make-quote (make-array)))) # Quote of quote of list
+
+(print (is-quote a) sp (is-quote b) sp (is-quote c) ln)
+(print (is-int a) sp (is-array b) sp (is-array c) sp (unquote c) ln)
+
+(set 'd (unquote b))
+
+(print (is-array (unquote a)) sp d sp (unquote b) sp (is-int (unquote b)) sp (is-array (unquote (unquote c))) ln)
+
+(set b 4)
+
+(print (is-int b) sp (is-int (unquote b)) sp d sp (unquote b) ln)

@@ -233,7 +233,6 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 			if TRACE_DEBUG {
 				let Some(StackFrame{group,..}) = stack.last() else { die(); };
 				eprintln!("\tDepth: {} State: {:?} Group: {:?}", stack.len(), state.clone(), group);
-				eprintln!("{:?}", &stack);
 			}
 			match state.clone() {
 			    ReadState::Scan(_) => { // "Normal"
@@ -293,6 +292,25 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 
 			    	if ch == '\\' {
 			    		state = ReadState::Backslash(false);
+			    		break 'process;
+			    	}
+
+			    	// Close parens (must go below "substance" line)
+			    	if is_paren_close(ch) {
+				    	let Some(StackFrame{group,..}) = stack.last() else { die(); };
+				    	match (group, ch) {
+				    		(GroupKind::Round, ')') => (),
+				    		(GroupKind::Curly(line_state), '}') | (GroupKind::Square(line_state), ']') => {
+				    			if *line_state == GroupLineState::Line {
+				    				peel(&mut stack);
+				    			}
+				    		}
+				    		_ => return Err(Error {at, tag, message:format!("Unbalanced extra {} parenthesis", ch)})
+				    	}
+
+
+			    		peel(&mut stack);
+
 			    		break 'process;
 			    	}
 
@@ -366,26 +384,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 			    		break 'process;
 			    	}
 
-			    	// Close parens
-			    	if is_paren_close(ch) {
-				    	let Some(StackFrame{group,..}) = stack.last() else { die(); };
-				    	match (group, ch) {
-				    		(GroupKind::Round, ')') => (),
-				    		(GroupKind::Curly(line_state), '}') | (GroupKind::Square(line_state), ']') => {
-				    			if *line_state == GroupLineState::Line {
-				    				peel(&mut stack);
-				    			}
-				    		}
-				    		_ => return Err(Error {at, tag, message:format!("Unbalanced extra {} parenthesis", ch)})
-				    	}
-
-
-			    		peel(&mut stack);
-
-			    		break 'process;
-			    	}
-
-			    	// Close parens
+			    	// Open parens
 			    	if is_paren_open(ch) {
 			    		state = ReadState::Scan(false);
 

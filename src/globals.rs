@@ -458,6 +458,9 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 				match eval.memory.value(args[1].clone()) {
 					Value::Primitive(Primitive::Int(i)) => {
 						let idx = i as usize;
+						if i < 0 { // FIXME: Reduce code duplication here
+							return Err(Error {message:format!("Negative index to `get`: {}", i)})
+						}
 						// This is O(N) :(
 						s.chars().nth(idx).map(|ch|eval.memory.value_new(Value::Primitive(Primitive::String(ch.to_string()))))
 					}
@@ -468,6 +471,9 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 				match eval.memory.value(args[1].clone()) {
 					Value::Primitive(Primitive::Int(i)) => {
 						let idx = i as usize;
+						if i < 0 {
+							return Err(Error {message:format!("Negative index to `get`: {}", i)})
+						}
 						eval.memory.array_get(args[0].clone(), idx)
 					}
 					v @ _ => return Err(Error {message:format!("Running `get` on array, expected integer index, got: {:?}", v)})
@@ -513,6 +519,9 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 				match eval.memory.value(args[1].clone()) {
 					Value::Primitive(Primitive::Int(i)) => {
 						let idx = i as usize;
+						if i < 0 {
+							return Err(Error {message:format!("Negative index to `has`: {}", i)})
+						}
 						idx < s.len()
 					}
 					v @ _ => return Err(Error {message:format!("Running `get` on string, expected integer index, got: {:?}", v)})
@@ -522,6 +531,9 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 				match eval.memory.value(args[1].clone()) {
 					Value::Primitive(Primitive::Int(i)) => {
 						let idx = i as usize;
+						if i < 0 {
+							return Err(Error {message:format!("Negative index to `has`: {}", i)})
+						}
 						idx < eval.memory.array_len(args[0].clone())
 					}
 					v @ _ => return Err(Error {message:format!("Running `get` on array, expected integer index, got: {:?}", v)})
@@ -555,7 +567,28 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 					v @ _ => return Err(Error {message:format!("Running `del` on dict, expected primitive index, got: {:?}", v)})
 				}
 			}
-			// TODO: Value::Dict, Value::Array, local
+			// TODO: local, maybe array?
+			v @ _ => return Err(Error {message:format!("First argument to `get` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		};
+		Ok(None)
+	}));
+
+	insert(memory, "truncate", Primitive::Builtin(|eval, args| {
+		if args.len() != 2 {
+			return Err(Error {message:format!("`del` expects exactly one argument")});
+		}
+		match eval.memory.value(args[0].clone()) {
+			Value::Array => {
+				match eval.memory.value(args[1].clone()) {
+					Value::Primitive(Primitive::Int(i)) => {
+						if i < 0 {
+							return Err(Error {message:format!("Negative index to `truncate`: {}", i)})
+						}
+						eval.memory.array_truncate(args[0].clone(), i as usize)
+					}
+					v @ _ => return Err(Error {message:format!("Running `del` on dict, expected primitive index, got: {:?}", v)})
+				}
+			}
 			v @ _ => return Err(Error {message:format!("First argument to `get` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		};
 		Ok(None)

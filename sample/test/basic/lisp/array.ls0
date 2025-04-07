@@ -3,6 +3,7 @@
 # Expect: 1 f [true] [nil]
 # Expect: 5 g h [true] [nil]
 # Expect: 5 i h [true] [nil]
+# Expect: 4 i [nil] [true] [nil]
 
 (set 'a (make-array))
 (set 'b (make-array 'c 'd 'e))
@@ -18,3 +19,9 @@
 (set b 3 'i)
 
 (print (len b) sp (get b 3) sp (get b 4) sp (has b 4) sp (has b 5) ln)
+
+# (print (has b -1) ln) # This worked (returned nil) at one point; maybe it will again in future.
+
+(truncate b 4)
+
+(print (len b) sp (get b 3) sp (get b 4) sp (has b 3) sp (has b 4) ln)

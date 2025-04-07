@@ -463,6 +463,12 @@ impl Memory {
 		ary.push(addr2);
 	}
 
+	pub fn array_truncate(&mut self, handle:MemHandle, len:usize) {
+		let cell = self.cell_mut(handle);
+		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+		ary.truncate(len);
+	}
+
 	pub fn dict_new(&mut self) -> MemHandle {
 		let cell = self.alloc_internal(MemCell::Dict(Default::default()));
 		self.handle_new(cell)

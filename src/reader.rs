@@ -224,6 +224,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 			continue; // Do NOTHING, not even increment line counters
 		}
 		let is_comma = ch == ',';
+		let is_comment_start = ch == '#';
 
 		if TRACE_DEBUG { eprintln!("Parsing: `{ch}`"); }
 		// Always aborts after one iteration, but is loop to allow continue
@@ -238,7 +239,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 			    	// Before anything, handle EOL in ls0 mode.
 			    	// Logic is: If following symbol, close group; if whitespace before symbol, ignore;
 			    	// if comma before symbol (or anything in ()), error.
-					if !lisp && (is_comma || is_newline) {
+					if !lisp && (is_comma || is_newline || is_comment_start) {
 						let Some(StackFrame{group,..}) = stack.last() else { die(); };
 						let group = group.clone();
 						match group {
@@ -268,7 +269,9 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 										_ => die() // GroupLineState::Line should only be a child of GroupLineState::Normal or GroupLineState::Comma.
 									}
 								}
-								break 'process;
+								if !is_comment_start { // comments break right after this
+									break 'process;
+								}
 							}
 							GroupKind::None => () // Fall through and , will be illegal as below.
 						};
@@ -276,14 +279,14 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 						return Err(Error {at, tag, message:"Please don't use commas in LISP mode".to_string()});
 					}
 
-			    	check_illegal(illegal, &at, &tag, ch)?;
-
-			    	if is_whitespace(ch) {
+			    	if is_comment_start { // Comment
+			    		state = ReadState::Comment(false);
 			    		break 'process;
 			    	}
 
-			    	if ch == '#' { // Comment
-			    		state = ReadState::Comment(false);
+			    	check_illegal(illegal, &at, &tag, ch)?;
+
+			    	if is_whitespace(ch) {
 			    		break 'process;
 			    	}
 
@@ -482,8 +485,8 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 			    		state = ReadState::Scan(false);
 			    		peel(&mut stack);
 
-			    		if is_white {
-			    			break 'process; // Tiny efficiency win
+			    		if lisp && is_white {
+			    			break 'process; // Tiny efficiency win(?)
 			    		} else {
 			    			continue 'process;
 			    		}

@@ -4,7 +4,7 @@
 
 set 'do-print {
 	set 'z x
-	print z y
+	print z sp y ln
 }
 
 set 'x 1

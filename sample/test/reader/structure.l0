@@ -1,8 +1,10 @@
 # Convoluted expressions to test reader edge cases.
+# Arg: --debug-ast
+# Expect: (("a"), (("b", "c")), (("make-array", ("d"), ("e"), ("f", "g"), ("h", "i"), (("j")), ((make-array ("k"))), ((make-array ("l"))), '(("m")), ((make-array ("n") ("o") ("p") ("q"), ("r") ("s") ("t"))))))
 
 a # comment
 (b c) # comment
-( # comment
+[ # comment
  d #comment
     e
     f \
@@ -12,18 +14,32 @@ a # comment
     # Spaces after backslash
     (j \   
     )
-    ( \
+    [ \
     k
-    )
-    ( \
+    ]
+    [ \
 # comment
     l
-    )
+    ]
 
-    ( \
+    [ \
+# comment
+    l
+    ]
+
+    { \
 
     # comment
 
     m
-    )
-)
+    }
+
+    [
+      n, o,p
+      q  \    
+      r,s,
+
+#comment
+      t,
+    ]
+]

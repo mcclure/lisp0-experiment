@@ -1,0 +1,27 @@
+# Example program -- LISP syntax
+
+# Create a "function" from a quoted list:
+
+(set 'four-plus-five
+     '( (set 'x 4)
+        (set 'y 5)
+        (print (+ x y))
+      )
+)
+
+# But the quoted list isn't special...
+# We could construct it "by hand":
+
+(set 'four-times-five (make-array))
+(set 'temp-line (make-array))
+(push temp-line "print")
+(set 'temp-call (make-array))
+(push temp-call "*")
+(push temp-call 4)
+(push temp-call 5)
+(push temp-line temp-call)
+(push four-times-five temp-line)
+
+# Call our functions:
+(four-plus-five)      (print ln)
+(four-times-five)     (print ln)

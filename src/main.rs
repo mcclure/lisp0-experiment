@@ -8,6 +8,7 @@ use either::Either;
 use char_reader::CharReader;
 
 const VERSION:&str = "0.1";
+const VARIANT:&str = "2025-04-07";
 
 mod eval;
 mod globals;
@@ -41,7 +42,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     if cli.version {
-        println!("Unnamed language interpreter, v{}", VERSION);
+        println!("Unnamed language interpreter, v{VERSION}\nLanguage variant {VARIANT}");
         return Ok(());
     }
 

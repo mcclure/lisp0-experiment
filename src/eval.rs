@@ -199,7 +199,7 @@ impl Eval {
 								};
 
 								if TRACE_DEBUG {
-									print!("[EVAL DESCEND carl {} cdrl {}: ", self.memory.array_len(car.clone()), cdr.len());
+									print!("[EVAL DESCEND depth: {} carl {} cdrl {}: ", self.stack.len(), self.memory.array_len(car.clone()), cdr.len());
 									let mut first = false; for handle in cdr {
 										if !first { first = true; } else { print!(", ") }
 										print!("{}", self.memory.value(handle.clone()));

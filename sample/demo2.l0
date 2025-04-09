@@ -1,0 +1,35 @@
+# Demonstrate significant-whitespace / "l0" syntax
+set 'x 3
+set 'y 7
+
+set 'array [
+    + y x
+    - y x
+    * y x
+    / y x
+    % y x
+]
+
+set 'noop {return nil}
+
+set 'iter {
+    set 'iter-array (get args 0)
+    set 'iter-idx (get args 1)
+    set 'iter-continue (has iter-array iter-idx) # Index exists?
+
+    # Two functions: Noop does nothing; anonymous fn recurses iter.
+    # Due to a language design oversight, to write [1,2] you must
+    # write [return 1, return 2]. ("return" is identity combinator)
+    set 'func-pair [
+        return noop,
+        return {
+            print "at idx: " iter-idx sp \
+                  "value: "  (get iter-array iter-idx) ln
+            iter iter-array (+ iter-idx 1)
+        },
+    ]
+
+    (get func-pair (to-int iter-continue)) # Call function 0 or 1
+}
+
+iter array 0

@@ -7,8 +7,9 @@ use std::fs;
 use either::Either;
 use char_reader::CharReader;
 
-const VERSION:&str = "0.1";
+const VERSION:&str = "0.1.1";
 const VARIANT:&str = "2025-04-07";
+const VAR_REV:Option<&str> = Some("2");
 
 mod eval;
 mod globals;
@@ -42,7 +43,11 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     if cli.version {
-        println!("Unnamed language interpreter, v{VERSION}\nLanguage variant {VARIANT}");
+        print!("Unnamed language interpreter, v{VERSION}\nLanguage variant {VARIANT}");
+        if let Some(revision) = VAR_REV {
+            print!(" (rev {revision})");
+        }
+        println!();
         return Ok(());
     }
 

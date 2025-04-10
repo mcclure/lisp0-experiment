@@ -1,0 +1,3 @@
+# Expect failure
+
+fail "Successful failure. Here are some numbers: " 3 sp "2" sp (- 3 2)

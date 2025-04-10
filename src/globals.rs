@@ -805,6 +805,14 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		Ok(Some(args[0].clone()))
 	}));
 
+	insert(memory, "fail", Primitive::Builtin(|eval, args| {
+		let mut out = "".to_string();
+		for arg in args {
+			out.push_str(&format!("{}", eval.memory.value(arg.clone())));
+		}
+		Err(Error {message: out})
+	}));
+
 	// --- Constants ---
 
 	insert(memory, "nil", Primitive::Nil);

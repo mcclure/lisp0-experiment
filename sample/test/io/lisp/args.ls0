@@ -4,5 +4,24 @@
 # AppArg: 2 x
 
 # Expect: 3 2 x [true]
+# Expect: 4 6
+# Expect: 3 7
+# Expect: 3 2 x [true]
 
+(print (len args) sp (get args 0) sp (get args 1) sp (= "2 x" (get args 2)) ln)
+
+# Test that nesting function calls doesn't break outermost args
+(set 'nest1 '(
+	(print (get args 0) sp (get args 1) ln)
+))
+
+(set 'nest2 '(
+	(set 'x (get args 0))
+	(nest1 (- x 1) (+ x 1))
+	(nest1 (- x 2) (+ x 2))
+))
+
+(nest2 5)
+
+# Original test again
 (print (len args) sp (get args 0) sp (get args 1) sp (= "2 x" (get args 2)) ln)

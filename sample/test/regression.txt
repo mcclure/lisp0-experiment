@@ -9,6 +9,7 @@ reader/blank.l0
 reader/blank-comment.l0
 reader/quote.l0
 reader/values.l0
+basic/fail/fail.l0
 basic/fail/math_string_add.l0
 basic/fail/math_variad_ne.l0
 basic/fail/math_noarg_plus.l0

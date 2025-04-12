@@ -752,12 +752,13 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		std::fs::File::open(path).map(|f| std::io::BufReader::new(f))
 	});
 
-	// Arguments: path, create, truncate
+	// Arguments: path, create, truncate (!truncate implies append)
 	insert_fileopen!("file-out", file_out, 3, |memory:&Memory, args:&[MemHandle], path| {
 		let create = args.len() > 1 && value_to_bool(memory.value(args[1].clone()));
 		let truncate = args.len() > 2 && value_to_bool(memory.value(args[2].clone()));
+		let append = !truncate;
 
-		std::fs::OpenOptions::new().write(true).create(create).truncate(truncate).open(path)
+		std::fs::OpenOptions::new().write(true).create(create).truncate(truncate).append(append).open(path)
 	});
 
 	insert(memory, "read-line", Primitive::Builtin(|eval, args| {

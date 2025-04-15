@@ -1,0 +1,340 @@
+# Advent of Code 2025, day 6, part 1 -- solution
+
+# AppArg: sample/aoc/data/sample.txt
+# Expect: Steps: 45 Visited: 41
+
+set 'noop {return nil}
+
+# Usage: if conditional {case1} {case2}
+set 'if {
+	inset args '(_if_cond _if_true _if_false) # Mass-assign sugar
+	set '_if_pair [return noop, return _if_false]
+	set '_if_pair [
+		get _if_pair (to-int (to-bool _if_false))
+		return _if_true
+	]
+	(get _if_pair (to-int (to-bool _if_cond))) # Extra () means execute
+}
+
+# Usage if {conditional} {case}
+set 'while {
+	inset args '(_while_cond _while_true)
+	set '_while_pair [return noop]
+	push _while_pair [ # Construct fn as data so we don't have to think about
+		return [make-quote _while_true] # ..variable shadowing when recursing
+		return [return 'while, make-quote _while_cond, make-quote _while_true]
+	]
+	(get _while_pair (to-int (to-bool (_while_cond))))
+}
+
+set '<0 { != 0 (& -9223372036854775808 (get args 0)) }
+set '< {
+	<0 (- (get args 0) (get args 1))
+}
+set '>= { ! (< (get args 0) (get args 1)) }
+set '<= { # No, these variable names aren't great
+	inset args '(_<=_x  _<=_y)
+	|| (=  _<=_x  _<=_y) (<  _<=_x  _<=_y)
+}
+set '> { ! (<= (get args 0) (get args 1)) }
+
+# Helpers -- flow control -- 2
+
+# Usage for 'varname from to {case} step
+set 'for {
+	inset args '(_for_var  _for_from  _for_to  _for_case  _for_step)
+	if (! _for_step) {
+		set '_for_step \
+			(if (<  _for_from  _for_to) {return 1} {return -1})
+	}
+
+	set _for_var _for_from
+
+	# Construct to inline vars
+	[return [
+		return 'while
+		make-quote [return [return !=, return _for_var, return _for_to]]
+		make-quote [
+	        return [make-quote _for_case]
+	        return [return set, make-quote _for_var, return [
+				return '+, return _for_var, return _for_step
+			]]
+		]
+	]]
+}
+
+set 'match {
+	inset args '(_match_key _match_table _match_default)
+	set '_match_at 0
+	set '_match_to (len _match_table)
+	set '_match_result nil
+
+#	print (get (get _match_table 0) 0) ln
+
+	while {&& (! _match_result) (< _match_at _match_to)} {
+		set '_match_line (get _match_table _match_at)
+#		print "tst" _match_line sp _match_key sp (get _match_line 0) sp "?" (= _match_key (get _match_line 0)) ln
+		if (= _match_key (get _match_line 0)) {
+			set '_match_result (get _match_line 1)
+		} {
+			set '_match_at (+ _match_at 1)
+		}
+	}
+
+	set '_match_table nil # Clear these, they might be large...
+	set '_match_line nil
+
+	if _match_result {
+		_match_result
+	} {
+		if _match_default {
+			_match_default
+		}
+	}
+}
+
+# Vectors
+
+set 'v { return [get args 0, get args 1] }
+
+set 'v+ {
+	inset args '(_v_1 _v_2)
+	v \
+		(+ (get _v_1 0) (get _v_2 0)) \
+		(+ (get _v_1 1) (get _v_2 1))
+}
+
+set 'vneg {
+	inset args '(_v_1)
+	v (neg (get _v_1 0)) (neg (get _v_2 0))
+}
+
+set 'v= {
+	inset args '(_v_1 _v_2)
+	&& \
+		(= (get _v_1 0) (get _v_2 0)) \
+		(= (get _v_1 1) (get _v_2 1))
+}
+
+set 'vstr {
+	inset args '(_v_1)
+	+ "[" (get _v_1 0) ", " (get _v_1 1) "]"
+}
+
+# Program
+
+inset args '(arg-file arg-debug-verbose arg-debug)
+
+if (< (len args) 1) {
+	fail "No arguments" ln
+}
+
+# Constants
+
+set 'RIGHT   0
+set 'UP      1
+set 'DOWN    2
+set 'LEFT    3
+set 'FREE    4
+set 'VISITED 5
+set 'WALL    6
+
+set 'DIRS [
+	v  1  0
+	v  0 -1
+	v -1  0
+	v  0  1
+]
+
+set 'CHARS '(> ^ < v . X)
+push CHARS "#" # Oops, hard to escape #
+
+# Interpret debug args
+if arg-debug-verbose {
+	set 'arg-debug-verbose (!= arg-debug-verbose "0")
+	set 'arg-debug true
+} {
+	if arg-debug { set 'arg-debug (!= arg-debug "0") }
+}
+
+# Vars
+
+set 'x-len nil
+set 'g-at nil
+set 'g-dir nil
+set 'g-visit 0
+set 'g-step 0
+
+set 'board []
+
+# Input
+
+file-in arg-file
+
+while {
+	set 'line (read-line)
+	return line
+} {
+	set 'line-len (len line)
+
+	if (> line-len 0) {
+		if (! x-len) {
+			set 'x-len line-len
+		} {
+			if (!= line-len x-len) {
+				fail "Lines of inconsistent length (" line-len ", " x-len ")"
+			}
+		}
+
+		set 'guard-found {
+			inset args '(tmp-dir)
+			if g-dir {
+				fail "Multiple guards"
+			} {
+				set 'g-dir tmp-dir
+				set 'g-at (v x (len board))
+			}
+		}
+
+		# This line is good, parse it
+		set 'line-tile []
+		for 'x 0 line-len {
+			set 'char (get line x)
+
+			set 'tile (match char [
+				return [return ".", return {
+					return FREE
+				}]
+
+				return [return "#", return {
+					return WALL
+				}]
+
+				return [return ">", return {
+					guard-found RIGHT
+					return FREE
+				}]
+
+				return [return "v", return {
+					guard-found DOWN
+					return FREE
+				}]
+
+				return [return "<", return {
+					guard-found LEFT
+					return FREE
+				}]
+
+				return [return "^", return {
+					guard-found UP
+					return FREE
+				}]
+			] {
+				fail "Unrecognized character " char
+			})
+
+			push line-tile tile
+		}
+		push board line-tile
+	}
+}
+
+file-in nil
+
+if arg-debug {
+	print "Board: " x-len " x " (len board) ln
+	print "Guard: " (get CHARS g-dir) sp (vstr g-at) ln
+}
+
+set 'board-print {
+	for 'y 0 (len board) {
+		for 'x 0 x-len {
+			if (v= g-at (v x y)) {
+				print (get CHARS g-dir)
+			} {
+				set 'tile (get (get board y) x)
+				print (get CHARS tile)
+			}
+		}
+		print ln
+	}
+}
+
+set 'board-in {
+	inset args '(_b_in)
+	&& \
+		(<= 0 (get _b_in 0))           \
+		(<= 0 (get _b_in 1))           \
+		(>  x-len       (get _b_in 0)) \
+		(>  (len board) (get _b_in 1))
+}
+
+set 'board-get {
+	inset args '(_b_in)
+	get (get board (get _b_in 1)) (get _b_in 0)
+}
+
+set 'searching (board-in g-at)
+
+# One iteration of this loop is one step of the guard
+while {return searching} {
+	if arg-debug-verbose {
+		print ln "  -- step" sp g-step ln ln
+		board-print
+	}
+
+	# One iteration of this loop is one compass direction checked
+	set 'step-success nil
+	set 'step-tried 0
+
+	while {&& (! step-success) (< step-tried 4)} {
+		set 'step-at (v+ g-at (get DIRS g-dir))
+
+		if arg-debug-verbose { print "Try: " (vstr step-at) sp }
+
+		if (! (board-in step-at)) {
+			if arg-debug-verbose { print "OUT" }
+
+			# Case: We have escaped the board.
+			# Don't update the board or guard, just quit.
+			set 'step-success true
+			set 'searching nil
+		} {
+			set 'step-tile (board-get step-at)
+			if (= step-tile WALL) {
+				if arg-debug-verbose { print "ROT " }
+
+				# Case: Our candidate space is occupied. Rotate.
+				set 'g-dir (% (+ g-dir 7) 4) # We use euler angles, the problem doesn't
+			} {
+				if arg-debug-verbose { print "SUCCESS" }
+
+				# Case: candidate space unoccupied
+				set 'step-success true
+				set 'g-at step-at
+
+				if (= step-tile FREE) {
+					# Case: The space has never been visited before.
+					set 'g-visit (+ g-visit 1)
+					set (get board (get g-at 1)) (get g-at 0) VISITED
+				}
+			}
+		}
+
+		if arg-debug-verbose { print ln }
+
+		# Only try 4 times then give up.
+		set 'step-tried (+ step-tried 1)
+	}
+
+	if (! step-success) {
+		fail "Guard trapped?"
+	}
+
+	set 'g-step (+ g-step 1) # For debugging
+}
+
+if (&& arg-debug (! arg-debug-verbose)) { board-print }
+if arg-debug { print ln }
+
+print "Steps: " g-step " Visited: " g-visit ln

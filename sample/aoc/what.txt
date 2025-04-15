@@ -1,0 +1,13 @@
+This directory contains solutions for both parts of the Advent of Code 2024 challenge, day 6:
+
+https://adventofcode.com/2024/day/6
+
+They are included here as sample code because they are as of the moment I'm writing this the most complicated programs written in this language. Note because you're not supposed to know what part 2 of the AOC puzzles are until you've completed part 1, the part 2 solution(s) constitute "spoilers".
+
+The data/ directory contains sample input for these programs. `sample.txt` is the example input from the AOC problem statement; the correct output for part 1 is 41 and the correct output for part 2 is 6.
+
+A larger input `puzzle.txt` is included in the file `extra.zip`. Attempting to run either part 2 solution on puzzle.txt will probably result in a GC crash.
+
+You may notice the part 2 solution comes in two forms, one marked "buggy". The "buggy" version is more optimized, but produces incorrect answers. (I include it because it actually is better at triggering the GC crash, which is under investigation.)
+
+See line 125 of each source file for its arguments.

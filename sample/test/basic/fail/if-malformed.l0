@@ -1,0 +1,4 @@
+# Nothing but "else" (or nil, I guess) allowed for third arg of if
+# Expect failure
+
+if nil { print 2 } { print 3 } { print 4 }

@@ -2,6 +2,7 @@
 # Expect: True 5
 # Expect: False 8
 # Expect: [nil]
+# Expect: False 10
 
 set 'x (if nil { return nil } { return true }) # Todo: >
 
@@ -10,3 +11,5 @@ print (if x { print "True ", return 5 } { print "False ", return 6}) ln
 print (if (! x) { print "True ", return 7 } { print "False ", return 8}) ln
 
 print (if (! x) { print "True ", return 8 }) ln
+
+print (if (! x) { print "True ", return 9 } else { print "False ", return 10}) ln

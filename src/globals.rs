@@ -821,18 +821,27 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		if argsn < 2 {
 			return Err(Error {message:"Not enough arguments to `if`".to_string()});
 		}
-		if argsn > 3 {
+		if argsn > 4 {
 			return Err(Error {message:"Too many arguments to `if`".to_string()});
 		}
 		let cond = value_to_bool(eval.memory.value(args[0].clone()));
 		if cond {
 			Ok(SpecialResult::Push(vec![args[1].clone()]))
+		} else if argsn > 3 {
+			match eval.memory.value(args[2].clone()) {
+    			Value::Primitive(Primitive::Nil) => {
+    				Ok(SpecialResult::Push(vec![args[3].clone()]))
+    			}
+    			v @ _ => Err(Error {message:format!("Expected `else` as third argument to `if`, got: {:?}", v)})
+			}
 		} else if argsn > 2 {
 			Ok(SpecialResult::Push(vec![args[2].clone()]))
 		} else {
 			Ok(SpecialResult::None)
 		}
 	}));
+
+	insert(memory, "else", Primitive::Nil);
 
 	// --- Oddballs ---
 

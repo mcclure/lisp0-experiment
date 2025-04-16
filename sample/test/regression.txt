@@ -17,6 +17,7 @@ basic/fail/math_variad_return.l0
 basic/fail/no-such-var.l0
 basic/fail/math_variad_mod.l0
 basic/fail/math_1arg_divide.l0
+basic/fail/if-malformed.l0
 basic/fun.l0
 basic/nil.l0
 basic/setprint.l0

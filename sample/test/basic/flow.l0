@@ -1,0 +1,12 @@
+# Builtin flow control
+# Expect: True 5
+# Expect: False 8
+# Expect: [nil]
+
+set 'x (if nil { return nil } { return true }) # Todo: >
+
+print (if x { print "True ", return 5 } { print "False ", return 6}) ln
+
+print (if (! x) { print "True ", return 7 } { print "False ", return 8}) ln
+
+print (if (! x) { print "True ", return 8 }) ln

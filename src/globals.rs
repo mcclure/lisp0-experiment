@@ -816,6 +816,24 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		}
 	}));
 
+	insert(memory, "if", Primitive::SpecialBuiltin(|eval, args| {
+		let argsn = args.len();
+		if argsn < 2 {
+			return Err(Error {message:"Not enough arguments to `if`".to_string()});
+		}
+		if argsn > 3 {
+			return Err(Error {message:"Too many arguments to `if`".to_string()});
+		}
+		let cond = value_to_bool(eval.memory.value(args[0].clone()));
+		if cond {
+			Ok(SpecialResult::Push(vec![args[1].clone()]))
+		} else if argsn > 2 {
+			Ok(SpecialResult::Push(vec![args[2].clone()]))
+		} else {
+			Ok(SpecialResult::None)
+		}
+	}));
+
 	// --- Oddballs ---
 
 	// Takes any number of arguments, returns nil.

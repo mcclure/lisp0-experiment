@@ -2,7 +2,7 @@
 
 use clap::builder::OsStringValueParser;
 
-use crate::eval::{Eval, Error};
+use crate::eval::{Error, Eval, SpecialBuiltin, SpecialResult};
 use crate::memory::{MemHandle, MemHandleImpl, Memory, Primitive, Value};
 
 use std::fmt;
@@ -789,6 +789,31 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		result.map_err(|e|fmt_fs_error(e, "read-all"))?;
 
 		Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::String(s)))))
+	}));
+
+	// --- Specials ---
+
+	insert(memory, "do", Primitive::SpecialBuiltin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:"`do` expects exactly 1 argument".to_string()});
+		}
+		Ok(SpecialResult::Push(vec![args[0].clone()]))
+	}));
+
+	insert(memory, "apply", Primitive::SpecialBuiltin(|eval, args| {
+		if args.len() != 2 {
+			return Err(Error {message:"`apply` expects exactly 2 arguments".to_string()});
+		}
+		match eval.memory.value(args[1].clone()) {
+			Value::Array => {
+				let mut array = vec![args[0].clone()];
+				array.append(&mut eval.memory.array_as_handles(args[1].clone()));
+
+				Ok(SpecialResult::Push(array))
+			},
+			// TODO: Value::Dict, Value::Array, local
+			v @ _ => Err(Error {message:format!("Second argument to `apply` unrecognized: {:?}", v)}) // TODO: Display not Debug
+		}
 	}));
 
 	// --- Oddballs ---

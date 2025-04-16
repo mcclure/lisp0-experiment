@@ -2,7 +2,7 @@ This is an interpreter for a programming language. The language is documented [i
 
 ## Variants
 
-As this is a WIP and the definition of this language is unstable, this should be thought of as the "2025-04-07" (revision 2) variant/edition of this language. Future versions of the interpreter targeting some other "variant" may not be backward-compatible with this one.
+As this is a WIP and the definition of this language is unstable, this should be thought of as the [currently no stable version; 2025-04-07 rev 2 with modifications] variant/edition of this language. Future versions of the interpreter targeting some other "variant" may not be backward-compatible with this one.
 
 ## Development
 

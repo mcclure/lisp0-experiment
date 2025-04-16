@@ -7,7 +7,17 @@ const TRACE_DEBUG:bool = false;
 use crate::memory::{Memory, MemHandle, Primitive, Value};
 use std::fmt;
 
+// TODO Merge Builtin, SpecialBuiltin?
+
+pub enum SpecialResult {
+	None,
+	Result(MemHandle),
+	Push(Vec<MemHandle>)
+}
+
 pub type Builtin = fn(&mut Eval, &[MemHandle]) -> Result<Option<MemHandle>, Error>;
+
+pub type SpecialBuiltin = fn(&mut Eval, &[MemHandle]) -> Result<SpecialResult, Error>;
 
 #[derive(Debug, Clone)]
 pub struct Error {
@@ -24,7 +34,7 @@ impl std::error::Error for Error {}
 
 pub struct Eval {
 	pub memory: Memory,
-	stack: Vec<(bool, Option<MemHandle>, MemHandle, Option<usize>, Vec<MemHandle>)>, // want-return?, restore-arg-on-return, function, linenum-at, line-in-progress
+	stack: Vec<(bool, Option<MemHandle>, Option<MemHandle>, Option<usize>, Vec<MemHandle>)>, // want-return?, restore-arg-on-return, function, linenum-at, line-in-progress
 
 	// Scratch space for globals.rs
 	pub file_allow: bool,
@@ -45,7 +55,7 @@ impl Eval {
 	pub fn new(memory: Memory, root: MemHandle, file_allow: bool) -> Self {
 		Self {
 			memory,
-			stack: vec![(false, None, root, Some(0), Default::default())],
+			stack: vec![(false, None, Some(root), Some(0), Default::default())],
 			file_allow, file_in: None, file_out: None
 		}
 	}
@@ -59,6 +69,7 @@ impl Eval {
 
 		// Oddball cases: Empty program, empty stack
 		if let Some((_, _, fun, _, _)) = self.stack.last() {
+			let Some(fun) = fun else { panic!("Internal error") };
 			if 0 == self.memory.array_len(fun.clone()) {
 				return Ok(())
 			}
@@ -67,6 +78,8 @@ impl Eval {
 		// stack will grow and shrink freely as program runs; when the stack's empty we're done.
 		'eval: loop {
 			let next = if let Some((_, _, fun, line_num, prepare)) = self.stack.last_mut() {
+				let Some(fun) = fun else { panic!("Internal error") };
+
 				// First work out what function we're running
 				let fun_len = self.memory.array_len(fun.clone()); // Used only in multiline functions
 
@@ -75,7 +88,6 @@ impl Eval {
 					if fun_len == 0 { // Isn't doing this every time slow :/
 						return Err(Error {message:format!("Executing empty function")}) 
 					}
-
 					let line = self.memory.array_get(fun.clone(), *line_num).expect("Interpreter internal error");
 					(line.clone(), self.memory.array_len(line))
 				} else { // We are executing a single line of code (probably a nested expression)
@@ -98,7 +110,7 @@ impl Eval {
 						// FIXME: Nil, True, Builtin are inappropriate because the reader doesn't make these?
 				        Value::Primitive(primitive) => match primitive {
 				            Primitive::Nil | Primitive::True
-				            | Primitive::Int(_) | Primitive::Builtin(_)
+				            | Primitive::Int(_) | Primitive::Builtin(_) | Primitive::SpecialBuiltin(_)
 				            	 => PrepareNext::Push(item),
 
 				            // Strings are treated as names, and read from the dynamic scope.
@@ -145,97 +157,136 @@ impl Eval {
 			match next {
 				// Prepare loop isn't done and wants an individual (call) evaluated.
 			    StackNext::Push(handle) => {
-			    	self.stack.push((true, None, handle, None, Default::default()));
+					if TRACE_DEBUG {
+						println!("[EVAL CALL depth: {}]", self.stack.len());
+					}
+			    	self.stack.push((true, None, Some(handle), None, Default::default()));
 			    }
 
 			    // Prepare loop is done and now we should execute the line we've prepared.
 			    StackNext::Execute(returning) => {
-			    	// Peel a layer off the stack (we might push the first three values back later but prepare we'll consume)
-			    	let (want_return,args_restore,fun,line_num,prepare) = self.stack.pop().unwrap(); // Consider making unwrap unsafe
-			    	let mut returned:Option<MemHandle> = None; // Will only be populated if returning
+			    	let mut return_on_continue = returning;
 
-			    	// The odd construction here is because one branch of this if "eats" args_restore
-			    	let mut args_restore = if returning {
-			    		args_restore
-			    	} else {
-			    		// More lines to execute in this function! Should not have popped
-			    		self.stack.push((want_return,args_restore,fun,Some(line_num.unwrap()+1),Default::default())); // unwrap known safe, could be unchecked
-			    		None
-			    	};
+			    	'execute: loop {
+				    	let returning = return_on_continue;
 
-			    	let returning = returning && want_return; // If the line wants to return but we're in the middle of a multiline function... don't return
-			    	
-			    	if prepare.len() == 0 { // Allow empty lines?? I guess a convenience for builders
-			    		if returning { // This means that () by itself is a shorthand for nil
-			    			returned = Some(self.memory.nil());
-			    		}
-			    	} else {
-			    		// Split into function and args
-			    		let (car,cdr):(&MemHandle,&[MemHandle]) = if prepare.len() == 1 { // Juggle unsafe split_at case
-			    			(&prepare[0], &[])
-			    		} else {
-			    			let (carl, cdrl) = prepare.split_at(1);
-			    			(&carl[0], cdrl)
-			    		};
-			    		// Only a couple things are executable actually...
-			    		match self.memory.value(car.clone()) {
-			    			// Interpreter defined
-				            Value::Primitive(Primitive::Builtin(fun)) => {
-				            	let result = fun(self, cdr)?;
-				            	if returning {
-				            		returned = Some(result.unwrap_or_else(|| self.memory.nil()));
-				            	}
-				            },
-				            // User defined
-							Value::Array => {
-								// The only complicated part here is juggling the args variable
-								let old_args = if args_restore.is_none() {
-									// Normal case: Fetch the args variable out of memory
-									let old_args = self.memory.dict_get(self.memory.globals.clone(), args_str!());
-									old_args.unwrap_or_else(||self.memory.nil()) // Failing here should be impossible currently
-								} else {
-									// Tail recursion case: yoink the args var *this* stackframe was supposed to return
-									std::mem::take(&mut args_restore).unwrap()
-								};
+				    	// Peel a layer off the stack (we might push the first three values back later but prepare we'll consume)
+				    	let (want_return,args_restore,fun,line_num,prepare) = self.stack.pop().unwrap(); // Consider making unwrap unsafe
+				    	let mut returned:Option<MemHandle> = None; // Will only be populated if returning
 
-								if TRACE_DEBUG {
-									print!("[EVAL DESCEND depth: {} carl {} cdrl {}: ", self.stack.len(), self.memory.array_len(car.clone()), cdr.len());
-									let mut first = false; for handle in cdr {
-										if !first { first = true; } else { print!(", ") }
-										print!("{}", self.memory.value(handle.clone()));
-									}
-									println!("]");
+				    	// The odd construction here is because one branch of this if "eats" args_restore
+				    	let mut args_restore = if returning {
+				    		args_restore
+				    	} else {
+				    		// More lines to execute in this function! Should not have popped
+				    		self.stack.push((want_return,args_restore,fun,Some(line_num.unwrap()+1),Default::default())); // unwrap known safe, could be unchecked
+				    		None
+				    	};
+
+				    	let returning = returning && want_return; // If the line wants to return but we're in the middle of a multiline function... don't return
+				    	
+				    	if prepare.len() == 0 { // Allow empty lines?? I guess a convenience for builders
+				    		if returning { // This means that () by itself is a shorthand for nil
+				    			returned = Some(self.memory.nil());
+				    		}
+				    	} else {
+				    		// Split into function and args
+				    		let (car,cdr):(&MemHandle,&[MemHandle]) = if prepare.len() == 1 { // Juggle unsafe split_at case
+				    			(&prepare[0], &[])
+				    		} else {
+				    			let (carl, cdrl) = prepare.split_at(1);
+				    			(&carl[0], cdrl)
+				    		};
+		    				if TRACE_DEBUG {
+								print!("[EVAL EXEC depth: {} car {} cdrl {}: ", self.stack.len(), self.memory.value(car.clone()), cdr.len());
+								let mut first = false; for handle in cdr {
+									if !first { first = true; } else { print!(", ") }
+									print!("{}", self.memory.value(handle.clone()));
 								}
-
-								let args = self.memory.array_from_handles(cdr);
-								self.memory.dict_set(self.memory.globals.clone(), args_str!(), args);
-
-								self.stack.push((returning,Some(old_args),car.clone(),Some(0),Default::default()));
-							},
-							// That's it!
-							v @ _ => {
-				            	return Err(Error {message:format!("Tried to execute non-function: {:?}", v)}) // TODO display
+								println!("]");
 							}
+
+				    		// Only a couple things are executable actually...
+				    		match self.memory.value(car.clone()) {
+				    			// Interpreter defined
+					            Value::Primitive(Primitive::Builtin(fun)) => {
+					            	let result = fun(self, cdr)?;
+					            	if returning {
+					            		returned = Some(result.unwrap_or_else(|| self.memory.nil()));
+					            	}
+					            },
+					            Value::Primitive(Primitive::SpecialBuiltin(fun)) => {
+					            	let result = fun(self, cdr)?;
+					            	match result {
+					                    SpecialResult::None => {
+					                    	if returning {
+					                    		returned = Some(self.memory.nil())
+					                    	}
+					                    }
+					                    SpecialResult::Result(handle) => {
+					                    	if returning {
+					                    		returned = Some(handle);
+					                    	}
+					                    }
+					                    SpecialResult::Push(handles) => {
+					                    	if TRACE_DEBUG {
+	                							println!("[EVAL SPECIAL depth: {} returning: {returning}]", self.stack.len());
+					                    	}
+					                    	// This is not correct-- this reenters evaluation-- we want to reenter Execute()
+					                    	self.stack.push((returning,args_restore,None,None,handles));
+					                    	return_on_continue = true;
+					                    	continue 'execute;
+					                    }
+					                }
+					            },
+					            // User defined
+								Value::Array => {
+									// The only complicated part here is juggling the args variable
+									let old_args = if args_restore.is_none() {
+										// Normal case: Fetch the args variable out of memory
+										let old_args = self.memory.dict_get(self.memory.globals.clone(), args_str!());
+										old_args.unwrap_or_else(||self.memory.nil()) // Failing here should be impossible currently
+									} else {
+										// Tail recursion case: yoink the args var *this* stackframe was supposed to return
+										std::mem::take(&mut args_restore).unwrap()
+									};
+
+									if TRACE_DEBUG {
+										println!("[EVAL DESCEND depth: {} carl: {}]", self.stack.len(), self.memory.array_len(car.clone()));
+									}
+
+									let args = self.memory.array_from_handles(cdr);
+									self.memory.dict_set(self.memory.globals.clone(), args_str!(), args);
+
+									self.stack.push((returning,Some(old_args),Some(car.clone()),Some(0),Default::default()));
+								},
+								// That's it!
+								v @ _ => {
+					            	return Err(Error {message:format!("Tried to execute non-function: {:?}", v)}) // TODO display
+								}
+					        }
+				    	}
+
+				    	// End-of-function stack cleanup follows
+
+				        // If we're returning and we realized above we need to juggle args, do that
+				        if let Some(args_restore) = args_restore {
+				        	if TRACE_DEBUG {
+								println!(" [ARGS ASCEND RESTORE c {}] ", self.memory.array_len(args_restore.clone()));
+							}
+					        self.memory.dict_set(self.memory.globals.clone(), args_str!(), args_restore.clone());
+					    }
+
+				        // Peek stack one level, append to prepare and loop
+				       	// (If appending to prepare ISN'T the right thing to do... something went VERY wrong above!)
+				        if let Some(returned) = returned {
+				        	let Some((_, _, _, _, prepare)) = self.stack.last_mut() else { panic!("Interpreter internal error"); };
+				        	prepare.push(returned);
 				        }
-			    	}
 
-			    	// End-of-function stack cleanup follows
-
-			        // If we're returning and we realized above we need to juggle args, do that
-			        if let Some(args_restore) = args_restore {
-			        	if TRACE_DEBUG {
-							println!(" [ARGS ASCEND RESTORE c {}] ", self.memory.array_len(args_restore.clone()));
-						}
-				        self.memory.dict_set(self.memory.globals.clone(), args_str!(), args_restore.clone());
+					    break; // Do not actually loop
 				    }
-
-			        // Peek stack one level, append to prepare and loop
-			       	// (If appending to prepare ISN'T the right thing to do... something went VERY wrong above!)
-			        if let Some(returned) = returned {
-			        	let Some((_, _, _, _, prepare)) = self.stack.last_mut() else { panic!("Interpreter internal error"); };
-			        	prepare.push(returned);
-			        }
-			    }
+				}
 			}
 		}
 		Ok(())

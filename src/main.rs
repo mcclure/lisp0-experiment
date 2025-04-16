@@ -7,8 +7,8 @@ use std::fs;
 use either::Either;
 use char_reader::CharReader;
 
-const VERSION:&str = "0.1.1";
-const VARIANT:&str = "2025-04-07";
+const VERSION:&str = "0.1.2b";
+const VARIANT:&str = "2025-04-07+";
 const VAR_REV:Option<&str> = Some("2");
 
 mod eval;

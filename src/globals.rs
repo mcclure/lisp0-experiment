@@ -302,6 +302,33 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 	insert_equality!("=", false);
 	insert_equality!("!=", true); // FIXME: This is confusing because they all compare against #1.
 
+	macro_rules! insert_comparison {
+		($name:expr, $op:tt) => { // Third is a fn that returns true if it's time to short circuit
+			insert(memory, $name, Primitive::Builtin(|eval, args| {
+				if args.len() != 2 { // TODO: Allow >2?
+					return Err(Error {message:format!("Expected exactly 2 args to `{}`", $name)});
+				}
+
+				match (eval.memory.value(args[0].clone()), eval.memory.value(args[1].clone())) {
+					// TODO: Support, at *least*, comparing quotes
+					(Value::Primitive(Primitive::Int(a)), Value::Primitive(Primitive::Int(b))) => {
+						bool_to_handle(&mut eval.memory, a $op b)
+					}
+					(Value::Primitive(Primitive::String(a)), Value::Primitive(Primitive::String(b))) => {
+						bool_to_handle(&mut eval.memory, a $op b)
+					}
+					// TODO: Value::Dict, Value::Array, local
+					(a @ _, b @ _) => Err(Error {message:format!("Unrecognized arguments to `{}`: {:?} vs {:?}", $name, a, b)}) // TODO: Display not Debug
+				}
+			}))
+		}
+	}
+
+	insert_comparison!("<", <);
+	insert_comparison!(">", >);
+	insert_comparison!("<=", <=);
+	insert_comparison!(">=", >=);
+
 	// --- Conversion/types ---
 
 	macro_rules! insert_is {

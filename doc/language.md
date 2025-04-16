@@ -39,6 +39,8 @@ Except in the interior of strings or comments, and except when U+FEFF is the ope
 * U+00B4 ACUTE ACCENT is equivalent to `\`` (that is, it may open or close a `\`` type string).
 * Any Unicode character in category "Open Punctuation" or "Close Punctuation", unless it is explicitly mentioned earlier in this document, is an error. (These may be given semantics in a later version.)
 
+When comparing two Unicode strings, the strings are sorted by codepoint.
+
 # Semantics
 
 TODO

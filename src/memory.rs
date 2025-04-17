@@ -3,7 +3,7 @@
 // TODO: Drop handler on handles
 // TODO: Special address 0
 
-use crate::reader::AstContent;
+use crate::reader::{AstContent, AstNode, ReaderPosition};
 use crate::eval;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
@@ -79,7 +79,8 @@ impl fmt::Display for Value {
 enum MemCell {
 	Primitive(Primitive),
 	Quote(MemAddr),
-	Array(Vec<MemAddr>),
+	// Wacky: Every array knows what line it was made on? Fits in 56 byte rule but should this be a Feature?
+	Array(ReaderPosition, Vec<MemAddr>),
 	Dict(HashMap<Primitive, MemAddr>),
 	Forward(MemAddr) // Used during GC only
 }
@@ -201,7 +202,7 @@ impl Memory {
 				        MemCell::Primitive(_) => (),
 				        MemCell::Quote(addr) =>
 				        	*addr = forward_one(space_from, space_to, *addr, &mut todo, true),
-				        MemCell::Array(vec) => {
+				        MemCell::Array(_, vec) => {
 				        	for addr in vec {
 				        		*addr = forward_one(space_from, space_to, *addr, &mut todo, true);
 				        	}
@@ -263,25 +264,25 @@ impl Memory {
 		top
 	}
 
-	fn construct_internal(&mut self, src: AstContent) -> MemAddr {
-		let data = match src {
+	fn construct_internal(&mut self, src: AstNode) -> MemAddr {
+		let data = match src.content {
 			AstContent::Nil => MemCell::Primitive(Primitive::Nil),
 			AstContent::True => MemCell::Primitive(Primitive::True),
 			AstContent::String(s) => MemCell::Primitive(Primitive::String(s)),
 			AstContent::Int(s) => MemCell::Primitive(Primitive::Int(s)),
 			AstContent::Quote(c) => {
 				// Terrible memory locality properties
-				MemCell::Quote(self.construct_internal(c.content))
+				MemCell::Quote(self.construct_internal(*c))
 			},
 			AstContent::Group(v) => {
-				let v2 = v.into_iter().map(|c| self.construct_internal(c.content)).collect();
-				MemCell::Array(v2)
+				let v2 = v.into_iter().map(|c| self.construct_internal(c)).collect();
+				MemCell::Array(src.at, v2)
 			}
 		};
 		self.alloc_internal(data)
 	}
 
-	pub fn construct(&mut self, src: AstContent) -> MemHandle {
+	pub fn construct(&mut self, src: AstNode) -> MemHandle {
 		let addr = self.construct_internal(src);
 		self.handle_new(addr)
 	}
@@ -332,7 +333,7 @@ impl Memory {
 		match self.cell(handle) {
 			MemCell::Primitive(p) => Value::Primitive(p.clone()), // Is string clone a problem?
 			MemCell::Quote(_) => Value::Quote,
-			MemCell::Array(_) => Value::Array,
+			MemCell::Array(_, _) => Value::Array,
 			MemCell::Dict(_) => Value::Dict,
 			MemCell::Forward(_) => panic!("Memory corruption detected")
 		}
@@ -344,8 +345,8 @@ impl Memory {
 
 			// These aren't recommended, but we have to put something, so make an "empty"
 			Value::Quote => MemCell::Quote(self.alloc_internal(MemCell::Primitive(Primitive::Nil))),
-			Value::Array => MemCell::Array(Default::default()),
-			Value::Dict => MemCell::Array(Default::default()),
+			Value::Array => MemCell::Array(Default::default(), Default::default()),
+			Value::Dict => MemCell::Array(Default::default(), Default::default()),
 		}
 	}
 
@@ -397,13 +398,13 @@ impl Memory {
 	}
 
 	pub fn array_new(&mut self) -> MemHandle {
-		let addr = self.alloc_internal(MemCell::Array(Default::default()));
+		let addr = self.alloc_internal(MemCell::Array(Default::default(), Default::default()));
 		self.handle_new(addr)
 	}
 
 	pub fn array_from_handles(&mut self, handles: &[MemHandle]) -> MemHandle {
 		let addr = self.alloc_internal(MemCell::Primitive(Primitive::Nil)); // Is this suboptimal?
-		let cell2 = MemCell::Array(handles.iter().map(|handle|self.handle_to_addr(handle.clone())).collect());
+		let cell2 = MemCell::Array(Default::default(), handles.iter().map(|handle|self.handle_to_addr(handle.clone())).collect());
 		let cell = &mut self.space_mut()[addr];
 		*cell = cell2;
 		self.handle_new(addr)
@@ -412,19 +413,19 @@ impl Memory {
 	// Clone array or crash
 	pub fn array_as_handles(&mut self, handle: MemHandle) -> Vec<MemHandle> {
 		let cell = self.cell(handle);
-		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+		let MemCell::Array(_,ary) = cell else { panic!("Expected array") };
 		ary.clone().into_iter().map(|v| self.handle_new(v)).collect()
 	}
 
 	pub fn array_len(&mut self, handle:MemHandle) -> usize {
 		let cell = self.cell_mut(handle);
-		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+		let MemCell::Array(_,ary) = cell else { panic!("Expected array") };
 		ary.len()
 	}
 
 	pub fn array_get(&mut self, handle:MemHandle, idx:usize) -> Option<MemHandle> {
 		let cell = self.cell_mut(handle);
-		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+		let MemCell::Array(_,ary) = cell else { panic!("Expected array") };
 
 		if idx < ary.len() {
 			let addr = ary[idx];
@@ -434,17 +435,23 @@ impl Memory {
 		}
 	}
 
+	pub fn array_get_position(&self, handle:MemHandle) -> ReaderPosition {
+		let cell = self.cell(handle);
+		let MemCell::Array(pos,_) = cell else { panic!("Expected array") };
+		*pos
+	}
+
 	pub fn array_set(&mut self, handle:MemHandle, idx:usize, dst:MemHandle) {
 		let addr = self.handle_to_addr(dst);
 		let cell = self.cell_mut(handle);
-		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+		let MemCell::Array(_,ary) = cell else { panic!("Expected array") };
 		ary[idx] = addr;
 	}
 
 	pub fn array_push(&mut self, handle:MemHandle, dst:MemHandle) {
 		let addr = self.handle_to_addr(dst);
 		let cell = self.cell_mut(handle);
-		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+		let MemCell::Array(_,ary) = cell else { panic!("Expected array") };
 		ary.push( addr );
 	}
 
@@ -452,7 +459,7 @@ impl Memory {
 		let cell2 = self.value_to_cell_internal(value);
 		let addr2 = self.alloc_internal(cell2);
 		let cell = self.cell_mut(handle);
-		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+		let MemCell::Array(_,ary) = cell else { panic!("Expected array") };
 		ary[idx] = addr2;
 	}
 
@@ -460,13 +467,13 @@ impl Memory {
 		let cell2 = self.value_to_cell_internal(value);
 		let addr2 = self.alloc_internal(cell2);
 		let cell = self.cell_mut(handle);
-		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+		let MemCell::Array(_,ary) = cell else { panic!("Expected array") };
 		ary.push(addr2);
 	}
 
 	pub fn array_truncate(&mut self, handle:MemHandle, len:usize) {
 		let cell = self.cell_mut(handle);
-		let MemCell::Array(ary) = cell else { panic!("Expected array") };
+		let MemCell::Array(_,ary) = cell else { panic!("Expected array") };
 		ary.truncate(len);
 	}
 

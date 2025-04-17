@@ -88,8 +88,8 @@ fn main() -> anyhow::Result<()> {
 
         crate::globals::populate(&mut memory, &cli.args);
 
-        let root = memory.construct(v.source.content);
-        let mut eval = crate::eval::Eval::new(memory, root, !cli.disable_fs);
+        let root = memory.construct(v.source);
+        let mut eval = crate::eval::Eval::new(memory, root, v.source_tag, !cli.disable_fs);
 
         eval.eval().map_err( |e| e.into() )
     }

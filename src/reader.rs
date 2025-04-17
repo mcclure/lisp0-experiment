@@ -3,21 +3,32 @@
 // If EVERYTHING'S broken
 const TRACE_DEBUG:bool = false;
 
+pub const TAG_USER: u32 = 0;
+pub const TAG_INTERNAL: u32 = 1;
+pub const TAG_FILE: u32 = 2;
+
 use std::borrow::BorrowMut;
 use std::collections::HashSet;
 use std::fmt;
 
 type num = i64;
+pub type SourceTag = Vec<String>;
 
 // "Quote" means something different to the Reader than elsewhere.
 // To the Reader, "Quote" means "text between quotation marks".
 // Elsewhere, "quote" means something is "wrapped" as with ' or ".
 
 #[derive(Debug, Clone, Copy)]
-struct ReaderPosition {
-	source:u32, // source_tag index
-	line:u32, // 1-indexed
-	column:u32 // 1-indexed
+pub struct ReaderPosition {
+	pub source:u32, // source_tag index
+	pub line:u32, // 1-indexed
+	pub column:u32 // 1-indexed
+}
+
+pub const POSITION_UNKNOWN: ReaderPosition = ReaderPosition { source:TAG_INTERNAL, line:0, column:0 };
+
+impl Default for ReaderPosition {
+    fn default() -> Self { POSITION_UNKNOWN }
 }
 
 // Special substate of Quote
@@ -88,7 +99,7 @@ pub struct AstNode {
 
 #[derive(Debug)]
 pub struct Output {
-	pub source_tag: Vec<String>,
+	pub source_tag: SourceTag,
 	pub source: AstNode
 }
 
@@ -199,10 +210,10 @@ fn peel(stack: &mut Vec<StackFrame>) {
 pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, lisp:bool) -> Result<Output, Error> {
 	let mut state = ReadState::Scan(true);
 	let mut stack: Vec<StackFrame> = Default::default();
-	const NO_POSITION: ReaderPosition = ReaderPosition{source:0, line:0, column:0};
+	const NO_POSITION: ReaderPosition = ReaderPosition{source:TAG_FILE, line:0, column:0};
 	const PLACEHOLDER:AstNode =  AstNode { at:NO_POSITION, content:AstContent::Nil };
 	let mut source = AstNode { at:NO_POSITION, content:AstContent::Group(Default::default())};
-	let mut at = ReaderPosition{source:0, line:1, column:1};
+	let mut at = ReaderPosition{source:TAG_FILE, line:1, column:1};
 	let mut last_cr = false; // For merging \r\n
 	let illegal = &*illegal_chars;
 
@@ -623,7 +634,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 	}
 
 	Ok(Output {
-		source_tag: vec![tag],
+		source_tag: vec!["<user-defined>".to_string(), "<internal>".to_string(), tag],
 		source: stack.pop().unwrap().node
 	})
 }

@@ -4,6 +4,7 @@
 // If EVERYTHING'S broken
 const TRACE_DEBUG:bool = false;
 
+use crate::reader;
 use crate::memory::{Memory, MemHandle, Primitive, Value};
 use std::fmt;
 
@@ -32,8 +33,20 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+fn position_string(memory: &Memory, source_tag:&reader::SourceTag, handle:MemHandle) -> String {
+	let pos = memory.array_get_position(handle);
+	if pos.source == reader::POSITION_UNKNOWN.source
+	&& pos.line   == reader::POSITION_UNKNOWN.line
+	&& pos.column == reader::POSITION_UNKNOWN.column {
+		"[position unknown]".to_string()
+	} else {
+		format!("{} line {} column {}", source_tag[pos.source as usize], pos.line+1, pos.column+1)
+	}
+}
+
 pub struct Eval {
 	pub memory: Memory,
+	pub source_tag: reader::SourceTag,
 	stack: Vec<(bool, Option<MemHandle>, Option<MemHandle>, Option<usize>, Vec<MemHandle>)>, // want-return?, restore-arg-on-return, function, linenum-at, line-in-progress
 
 	// Scratch space for globals.rs
@@ -52,18 +65,29 @@ enum StackNext {
 }
 
 impl Eval {
-	pub fn new(memory: Memory, root: MemHandle, file_allow: bool) -> Self {
+	pub fn new(memory: Memory, root: MemHandle, source_tag:reader::SourceTag, file_allow: bool) -> Self {
 		Self {
 			memory,
+			source_tag,
 			stack: vec![(false, None, Some(root), Some(0), Default::default())],
 			file_allow, file_in: None, file_out: None
 		}
+	}
+
+	pub fn position_string(&self, handle: MemHandle) -> String {
+		position_string(&self.memory, &self.source_tag, handle)
 	}
 
 	pub fn eval(&mut self) -> Result<(), Error> {
 		macro_rules! args_str { // We need this string like three places below, I don't want to keep retyping it
 			() => {
 				Primitive::String("args".to_string())
+			}
+		}
+
+		macro_rules! eformat {
+			($pos:expr, $str:expr $(,$args:expr)*) => {
+				format!(concat!("{}: ", $str), position_string(&self.memory, &self.source_tag, $pos.clone()), $($args),*)
 			}
 		}
 
@@ -77,7 +101,8 @@ impl Eval {
 
 		// stack will grow and shrink freely as program runs; when the stack's empty we're done.
 		'eval: loop {
-			let next = if let Some((_, _, fun, line_num, prepare)) = self.stack.last_mut() {
+			let stack = &mut self.stack;
+			let next = if let Some((_, _, fun, line_num, prepare)) = stack.last_mut() {
 				let Some(fun) = fun else { panic!("Internal error") };
 
 				// First work out what function we're running
@@ -86,7 +111,7 @@ impl Eval {
 				// Now unpack the current line within that function
 				let (line, line_len) = if let Some(line_num) = line_num { // We are executing a normal multiline function
 					if fun_len == 0 { // Isn't doing this every time slow :/
-						return Err(Error {message:format!("Executing empty function")}) 
+						return Err(Error {message:eformat!(fun, "Executing empty function")}) 
 					}
 					let line = self.memory.array_get(fun.clone(), *line_num).expect("Interpreter internal error");
 					(line.clone(), self.memory.array_len(line))
@@ -122,7 +147,7 @@ impl Eval {
 					            	// Slightly awkward, premature optimization: Rather than clone name above in the expected case,
 					            	// when the exceptional case occurs make an entirely new call into memory to pull the string again.
 					            	let Value::Primitive(Primitive::String(name_str)) = self.memory.value(item) else { panic!("Interpreter internal error"); };
-					            	return Err(Error {message:format!("Unrecognized variable: {name_str}")})
+					            	return Err(Error {message:eformat!(fun, "Unrecognized variable: {}", name_str)})
 					            }
 				            },
 	        			},
@@ -179,7 +204,7 @@ impl Eval {
 				    		args_restore
 				    	} else {
 				    		// More lines to execute in this function! Should not have popped
-				    		self.stack.push((want_return,args_restore,fun,Some(line_num.unwrap()+1),Default::default())); // unwrap known safe, could be unchecked
+				    		self.stack.push((want_return,args_restore,fun.clone(),Some(line_num.unwrap()+1),Default::default())); // unwrap known safe, could be unchecked
 				    		None
 				    	};
 
@@ -262,7 +287,11 @@ impl Eval {
 								},
 								// That's it!
 								v @ _ => {
-					            	return Err(Error {message:format!("Tried to execute non-function: {:?}", v)}) // TODO display
+									let fun = if let Some(fun) = fun { fun } else {
+										let (_,_,fun,_,_) = self.stack.last().unwrap(); // Consider making unwrap unsafe
+										fun.clone().expect("Interpreter internal error")
+									};
+					            	return Err(Error {message:eformat!(fun, "Tried to execute non-function: {:?}", v)}) // TODO display
 								}
 					        }
 				    	}

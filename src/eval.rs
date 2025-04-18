@@ -40,7 +40,7 @@ fn position_string(memory: &Memory, source_tag:&reader::SourceTag, handle:MemHan
 	&& pos.column == reader::POSITION_UNKNOWN.column {
 		"[position unknown]".to_string()
 	} else {
-		format!("{} line {} column {}", source_tag[pos.source as usize], pos.line+1, pos.column+1)
+		format!("{} line {} column {}", source_tag[pos.source as usize], pos.line, pos.column)
 	}
 }
 
@@ -133,16 +133,17 @@ impl Eval {
 					let mut is_final = || {
 						if let Some(line_num) = line_num { *line_num >= fun_len-1 } else { true } // True if this is the last or only line of the fun
 					};
-					let Some(line_len) = line_len else {
-						prepare.push(line);
-						break 'prepare StackNext::Proceed(false, is_final())
+					
+					let item = if let Some(line_len) = line_len {
+						if line_len <= prepare.len() {
+							break 'prepare StackNext::Proceed(true, is_final()) // Prepare loop done
+						}
+						self.memory.array_get(line.clone(), prepare.len()).expect("Interpreter internal error") // We checked the length already
+					} else {
+						line.clone() // None len is an indication line was not an array.
 					};
-					if line_len <= prepare.len() {
-						break 'prepare StackNext::Proceed(true, is_final()) // Prepare loop done
-					}
 
 					// Inspect this word
-					let item = self.memory.array_get(line.clone(), prepare.len()).expect("Interpreter internal error"); // We checked the length already
 					let next = match self.memory.value(item.clone()) {
 						// Integers are produced by the reader and just get passed through.
 						// FIXME: Nil, True, Builtin are inappropriate because the reader doesn't make these?
@@ -183,7 +184,11 @@ impl Eval {
 				    // We survived to the end of the loop! Push the value we found and continue.
 				    match next {
 	        			PrepareNext::Push(handle) => {
-	        				prepare.push(handle)
+	        				prepare.push(handle);
+
+	        				if line_len.is_none() { // Line wasn't a list, so prepare loop wasn't much of a loop
+	        					break 'prepare StackNext::Proceed(false, is_final()) // Use prepare vec to shuttle line to next bit..
+	        				}
 	        			},
 				    };
 				}

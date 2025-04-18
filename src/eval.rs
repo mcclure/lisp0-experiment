@@ -40,10 +40,12 @@ fn position_string(memory: &Memory, source_tag:&reader::SourceTag, handle:MemHan
 	}
 }
 
+type StackFrame = (bool, Option<MemHandle>, Option<MemHandle>, Option<usize>, Vec<MemHandle>);
+
 pub struct Eval {
 	pub memory: Memory,
 	pub source_tag: reader::SourceTag,
-	stack: Vec<(bool, Option<MemHandle>, Option<MemHandle>, Option<usize>, Vec<MemHandle>)>, // want-return?, restore-arg-on-return, function, linenum-at, line-in-progress
+	stack: Vec<StackFrame>, // want-return?, restore-arg-on-return, function, linenum-at, line-in-progress
 
 	// Scratch space for globals.rs
 	pub file_allow: bool,
@@ -249,11 +251,21 @@ impl Eval {
 								println!("]");
 							}
 
+							fn true_fun(stack:&Vec<StackFrame>, fun:Option<MemHandle>) -> MemHandle {
+								if let Some(fun) = fun { fun } else {
+									let (_,_,fun,_,_) = stack.last().unwrap(); // Consider making unwrap unsafe
+									fun.clone().expect("Interpreter internal error")
+								}
+							}
+
 				    		// Only a couple things are executable actually...
 				    		match self.memory.value(car.clone()) {
 				    			// Interpreter defined
-					            Value::Primitive(Primitive::Builtin(fun)) => {
-					            	let result = fun(self, cdr)?;
+					            Value::Primitive(Primitive::Builtin(builtin)) => {
+					            	let result = builtin(self, cdr).map_err(|e| {
+					            		let fun = true_fun(&self.stack, fun);
+					            		Error {message:eformat!(fun, "{}", e.message)}
+					            	})?;
 					            	match result {
 					                    BuiltinReturn::None => {
 					                    	if returning {
@@ -299,10 +311,7 @@ impl Eval {
 								},
 								// That's it!
 								v @ _ => {
-									let fun = if let Some(fun) = fun { fun } else {
-										let (_,_,fun,_,_) = self.stack.last().unwrap(); // Consider making unwrap unsafe
-										fun.clone().expect("Interpreter internal error")
-									};
+				            		let fun = true_fun(&self.stack, fun);
 					            	return Err(Error {message:eformat!(fun, "Tried to execute non-function: {:?}", v)}) // TODO display
 								}
 					        }

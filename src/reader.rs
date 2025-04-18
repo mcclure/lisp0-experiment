@@ -3,6 +3,8 @@
 // If EVERYTHING'S broken
 const TRACE_DEBUG:bool = false;
 
+const ALLOW_L0_SOLO:bool = false; // Not sure about this decision
+
 pub const TAG_USER: u32 = 0;
 pub const TAG_INTERNAL: u32 = 1;
 pub const TAG_FILE: u32 = 2;
@@ -64,19 +66,20 @@ enum GroupKind { // What parenthesis closes this group?
 	None, // Can occur for quote (important) or non-Scan (unimportant) frames
 	File(GroupLineState),  // "Toplevel"
 	Round,
-	Curly(GroupLineState), // True if "line" has started
-	Square(GroupLineState) // True if last comma
+	Curly(GroupLineState),
+	Square(GroupLineState)
 }
 
 #[derive(Debug)]
 struct StackFrame {
 	node: AstNode,    // Building
 	group: GroupKind, // For parenthesis matching, line interpretation
+	group_solo: Option<usize>, // For l0, lines with a single item.
 }
 
 impl StackFrame {
 	fn new(node: AstNode, group: GroupKind) -> Self {
-		Self { node, group }
+		Self { node, group, group_solo: Default::default() }
 	}
 }
 
@@ -175,7 +178,7 @@ fn is_paren_close(ch:char) -> bool {
 }
 
 fn check_illegal(illegal:&HashSet<char>, at:&ReaderPosition, tag:&String, ch:char) -> Result<(), Error> {
-	let illegal = &*illegal_chars;
+	let illegal = &*illegal;
 	if illegal.contains(&ch) { // Illegal chars
 		return Err(Error {at:*at, tag:tag.clone(), message:format!("Illegal unicode char: U+{:x}", ch as u32)});
 	}
@@ -189,21 +192,60 @@ fn die() -> ! {
 }
 
 // Merge 1 layer of the stack upward.
-fn peel(stack: &mut Vec<StackFrame>) {
+// Can throw errors, because this is where we check the "Lone" rules.
+fn peel(stack: &mut Vec<StackFrame>, tag:&String, lisp:bool) -> Result<(), Error> {
 	loop {
-		let top = stack.pop().unwrap().node;
-		let into = &mut stack.last_mut().unwrap().node.content;
-		match into {
+		let Some(StackFrame {node:mut top, group:top_group, group_solo:top_group_solo}) = stack.pop() else { die() };
+		fn solo(node:&AstNode) -> bool {
+			let AstContent::Group(v) = &node.content else { die() };
+			v.len() == 1
+		}
+		// If completing a group, check for solo rule violations.
+		if !lisp {
+			if let GroupKind::Curly(GroupLineState::Normal) | GroupKind::Curly(GroupLineState::Comma) = top_group {
+				if let Some(group_solo) = top_group_solo {
+					let AstContent::Group(top_v) = &top.content else { die() };
+					if group_solo != top_v.len()-1 {
+						return Err(Error {at:top_v[group_solo].at, tag:tag.clone(), message:format!("Single item in middle of `{{}}` group. To call a function, use `do`")});
+					}
+				}
+			}
+		}
+		let Some(StackFrame{node:into, group_solo:into_group_solo, ..}) = &mut stack.last_mut() else { die() };
+		match &mut into.content {
 			AstContent::Quote(bx) => {
 				**bx = top;
 			}
 			AstContent::Group(v) => {
+				// Before pushing, we must apply "solo rules" (unwrap literal values).
+				if !lisp {
+					match top_group {
+						GroupKind::File(GroupLineState::Line) => {
+							if solo(&top) {
+								return Err(Error {at:top.at, tag:tag.clone(), message:format!("Single item at file toplevel. To call a function, use `do`")});
+							}
+						},
+						GroupKind::Curly(GroupLineState::Line) | GroupKind::Square(GroupLineState::Line) => {
+							if solo(&top) {
+								let AstContent::Group(top_v) = &mut top.content else { die() };
+								top = top_v.pop().unwrap();
+								if matches!(top_group, GroupKind::Curly(_)) {
+									if into_group_solo.is_none() {
+										*into_group_solo = Some(v.len())
+									}
+								}
+							}
+						}
+						_ => {}
+					}
+				}
 				v.push(top);
 				break;
 			}
 			_ => die()
 		}
 	}
+	Ok(())
 }
 
 // Take input as well as a string identifying the source (such as a filename)
@@ -265,7 +307,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 									})});
 								}
 								if is_line {
-				    				peel(&mut stack); // End of line and line has content.
+				    				peel(&mut stack, &tag, lisp)?; // End of line and line has content.
 
 									// Note shadowing of group, line_state here. Wow, a lot of lines of code dedicated to the comma error message here!
 									let Some(StackFrame{group,..}) = stack.last_mut() else { die(); };
@@ -313,20 +355,20 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 				    		(GroupKind::Round, ')') => (),
 				    		(GroupKind::Curly(line_state), '}') | (GroupKind::Square(line_state), ']') => {
 				    			if *line_state == GroupLineState::Line {
-				    				peel(&mut stack);
+				    				peel(&mut stack, &tag, lisp)?;
 				    			}
 				    		}
 				    		_ => return Err(Error {at, tag, message:format!("Unbalanced extra {} parenthesis", ch)})
 				    	}
 
 
-			    		peel(&mut stack);
+			    		peel(&mut stack, &tag, lisp)?;
 
 			    		break 'process;
 			    	}
 
 			    	// If we are still here, the character we are interpreting has "substance".
-			    	// In other words, if we are in ls0 mode, thi sis potentially the start of a line.
+			    	// In other words, if we are in ls0 mode, this is potentially the start of a line.
 			    	if !lisp {
 						let Some(StackFrame{group,..}) = stack.last() else { die(); };
 						match *group {
@@ -494,7 +536,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 			    	let is_white = is_whitespace(ch);
 			    	if is_white || is_paren_close(ch) || is_comma {
 			    		state = ReadState::Scan(false);
-			    		peel(&mut stack);
+			    		peel(&mut stack, &tag, lisp)?;
 
 			    		if lisp && is_white {
 			    			break 'process; // Tiny efficiency win(?)
@@ -536,7 +578,7 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 				    		} else {
 				    			if closed() {
 						    		state = ReadState::Scan(false);
-						    		peel(&mut stack);
+						    		peel(&mut stack, &tag, lisp)?;
 
 						    		break 'process;
 				    			} else {
@@ -609,19 +651,19 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 					eprintln!("Extra peel (word)");
 				}
 
-				peel(&mut stack);
+				peel(&mut stack, &tag, lisp)?;
 			}
 		}
 	}
 	if !lisp && stack.len() > 1 {
 		let into = &stack.last_mut().unwrap();
 		match into {
-			StackFrame { node:AstNode { content:AstContent::Group(_), .. }, group:GroupKind::File(_) } => {
+			StackFrame { node:AstNode { content:AstContent::Group(_), .. }, group:GroupKind::File(_), .. } => {
 				if TRACE_DEBUG {
 					eprintln!("Extra peel (file end)");
 				}
 
-				peel(&mut stack);
+				peel(&mut stack, &tag, lisp)?;
 			}
 			_ => ()
 		}

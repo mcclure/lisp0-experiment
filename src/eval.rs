@@ -60,8 +60,8 @@ enum PrepareNext {
 }
 
 enum StackNext {
-	Execute(bool), // Final line?
-	Push(MemHandle)
+	Proceed(bool, bool), // Will execute and/or return. Args: Execute? Final line?
+	Push(MemHandle) // Still preparing and need to invoke a function.
 }
 
 impl Eval {
@@ -85,6 +85,7 @@ impl Eval {
 			}
 		}
 
+		// TODO: Replace eformat with an after-the-fact stack walk; remove fun clone on third call
 		macro_rules! eformat {
 			($pos:expr, $str:expr $(,$args:expr)*) => {
 				format!(concat!("{}: ", $str), position_string(&self.memory, &self.source_tag, $pos.clone()), $($args),*)
@@ -114,18 +115,30 @@ impl Eval {
 						return Err(Error {message:eformat!(fun, "Executing empty function")}) 
 					}
 					let line = self.memory.array_get(fun.clone(), *line_num).expect("Interpreter internal error");
-					(line.clone(), self.memory.array_len(line))
+
+					// TODO: Replace eformat with an after-the-fact stack walk; remove fun clone on third call
+					match self.memory.value(line.clone()) {
+		                   // Think carefully: This doesn't refer to the *value* being an array but to the *code item* being an array.
+		                   Value::Array => (line.clone(), Some(self.memory.array_len(line))),
+		                   // Non-array items are simply "returned". TODO: Should quoted values be unwrapped?
+		                   _ => (line.clone(), None)
+					}
 				} else { // We are executing a single line of code (probably a nested expression)
-					(fun.clone(), self.memory.array_len(fun.clone()))
+					(fun.clone(), Some(self.memory.array_len(fun.clone())))
 				};
 
 				// We need to turn the line of "code" into a line of runtime values.
 				'prepare: loop {
 					// Interpret each word in the line, adding it to "prepare" until prepare has enough values
+					let mut is_final = || {
+						if let Some(line_num) = line_num { *line_num >= fun_len-1 } else { true } // True if this is the last or only line of the fun
+					};
+					let Some(line_len) = line_len else {
+						prepare.push(line);
+						break 'prepare StackNext::Proceed(false, is_final())
+					};
 					if line_len <= prepare.len() {
-						break 'prepare StackNext::Execute( // Prepare loop done
-							if let Some(line_num) = line_num { *line_num >= fun_len-1 } else { true } // True if this is the last or only line of the fun
-						)
+						break 'prepare StackNext::Proceed(true, is_final()) // Prepare loop done
 					}
 
 					// Inspect this word
@@ -189,7 +202,7 @@ impl Eval {
 			    }
 
 			    // Prepare loop is done and now we should execute the line we've prepared.
-			    StackNext::Execute(returning) => {
+			    StackNext::Proceed(execute, returning) => {
 			    	let mut return_on_continue = returning;
 
 			    	'execute: loop {
@@ -210,7 +223,11 @@ impl Eval {
 
 				    	let returning = returning && want_return; // If the line wants to return but we're in the middle of a multiline function... don't return
 				    	
-				    	if prepare.len() == 0 { // Allow empty lines?? I guess a convenience for builders
+				    	if !execute {
+				    		if returning {
+					    		returned = Some(prepare[0].clone());
+					    	}
+				    	} else if prepare.len() == 0 { // Allow empty lines?? I guess a convenience for builders
 				    		if returning { // This means that () by itself is a shorthand for nil
 				    			returned = Some(self.memory.nil());
 				    		}

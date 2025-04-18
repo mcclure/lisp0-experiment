@@ -28,7 +28,6 @@ pub enum Primitive {
 	String(String),
 	Int(i64),
 	Builtin(eval::Builtin), // Cannot be constructed (FIXME: include name?)
-	SpecialBuiltin(eval::SpecialBuiltin) // Also cannot be constructed
 	//Float(f64)
 }
 
@@ -44,7 +43,7 @@ impl fmt::Display for Primitive {
             Primitive::True => write!(f, "[true]"),
             Primitive::String(s) => write!(f, "{s}"),
             Primitive::Int(i) => write!(f, "{i}"),
-            Primitive::Builtin(_) | Primitive::SpecialBuiltin(_) => write!(f, "[builtin]")
+            Primitive::Builtin(_) => write!(f, "[builtin]")
         }
     }
 }

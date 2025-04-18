@@ -8,17 +8,13 @@ use crate::reader;
 use crate::memory::{Memory, MemHandle, Primitive, Value};
 use std::fmt;
 
-// TODO Merge Builtin, SpecialBuiltin?
-
-pub enum SpecialResult {
+pub enum BuiltinReturn {
 	None,
-	Result(MemHandle),
+	Value(MemHandle),
 	Push(Vec<MemHandle>)
 }
 
-pub type Builtin = fn(&mut Eval, &[MemHandle]) -> Result<Option<MemHandle>, Error>;
-
-pub type SpecialBuiltin = fn(&mut Eval, &[MemHandle]) -> Result<SpecialResult, Error>;
+pub type Builtin = fn(&mut Eval, &[MemHandle]) -> Result<BuiltinReturn, Error>;
 
 #[derive(Debug, Clone)]
 pub struct Error {
@@ -149,7 +145,7 @@ impl Eval {
 						// FIXME: Nil, True, Builtin are inappropriate because the reader doesn't make these?
 				        Value::Primitive(primitive) => match primitive {
 				            Primitive::Nil | Primitive::True
-				            | Primitive::Int(_) | Primitive::Builtin(_) | Primitive::SpecialBuiltin(_)
+				            | Primitive::Int(_) | Primitive::Builtin(_)
 				            	 => PrepareNext::Push(item),
 
 				            // Strings are treated as names, and read from the dynamic scope.
@@ -258,24 +254,18 @@ impl Eval {
 				    			// Interpreter defined
 					            Value::Primitive(Primitive::Builtin(fun)) => {
 					            	let result = fun(self, cdr)?;
-					            	if returning {
-					            		returned = Some(result.unwrap_or_else(|| self.memory.nil()));
-					            	}
-					            },
-					            Value::Primitive(Primitive::SpecialBuiltin(fun)) => {
-					            	let result = fun(self, cdr)?;
 					            	match result {
-					                    SpecialResult::None => {
+					                    BuiltinReturn::None => {
 					                    	if returning {
 					                    		returned = Some(self.memory.nil())
 					                    	}
 					                    }
-					                    SpecialResult::Result(handle) => {
+					                    BuiltinReturn::Value(handle) => {
 					                    	if returning {
 					                    		returned = Some(handle);
 					                    	}
 					                    }
-					                    SpecialResult::Push(handles) => {
+					                    BuiltinReturn::Push(handles) => {
 					                    	if TRACE_DEBUG {
 	                							println!("[EVAL SPECIAL depth: {} returning: {returning}]", self.stack.len());
 					                    	}

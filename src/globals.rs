@@ -2,7 +2,7 @@
 
 use clap::builder::OsStringValueParser;
 
-use crate::eval::{Error, Eval, SpecialBuiltin, SpecialResult};
+use crate::eval::{Error, Eval, BuiltinReturn};
 use crate::memory::{MemHandle, MemHandleImpl, Memory, Primitive, Value};
 
 use std::fmt;
@@ -13,6 +13,14 @@ use std::io::{Write, Read, BufRead};
 
 fn insert(memory: &mut Memory, name:&str, primitive:Primitive) {
 	memory.dict_set_value(memory.globals.clone(), Primitive::String(name.to_string()), Value::Primitive(primitive));
+}
+
+fn option_to_value(o:Option<MemHandle>) -> BuiltinReturn {
+	if let Some(o) = o {
+		BuiltinReturn::Value(o)
+	} else {
+		BuiltinReturn::None
+	}
 }
 
 pub fn populate(memory: &mut Memory, args:&[String]) {
@@ -32,7 +40,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 			Value::Primitive(v @ Primitive::String(_)) => {
 				if args.len() == 2 {
 					eval.memory.dict_set(eval.memory.globals.clone(), v, args[1].clone());
-					Ok(None)
+					Ok(BuiltinReturn::None)
 				} else {
 					Err(Error {message:"Too many args to `set`".to_string()})
 				}
@@ -40,7 +48,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 			Value::Quote => {
 				if args.len() == 2 {
 					eval.memory.quote_set(args[0].clone(), args[1].clone());
-					Ok(None)
+					Ok(BuiltinReturn::None)
 				} else {
 					Err(Error {message:"Too many args to `set`".to_string()})
 				}
@@ -50,7 +58,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 					match eval.memory.value(args[1].clone()) {
 						Value::Primitive(Primitive::Int(i)) => {
 							eval.memory.array_set(args[0].clone(), i as usize, args[2].clone());
-							Ok(None)
+							Ok(BuiltinReturn::None)
 						}
 						_ => Err(Error {message:"Index in array `set` not an integer".to_string()})
 					}
@@ -63,7 +71,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 					match eval.memory.value(args[1].clone()) {
 						Value::Primitive(p) => {
 							eval.memory.dict_set(args[0].clone(), p, args[2].clone());
-							Ok(None)
+							Ok(BuiltinReturn::None)
 						}
 						_ => Err(Error {message:"Index in dict `set` not a primitive".to_string()})
 					}
@@ -88,7 +96,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 				print!("{}", eval.memory.value(arg.clone()));
 			}
 		}
-		Ok(None)
+		Ok(BuiltinReturn::None)
 	}));
 
 	insert(memory, "flush", Primitive::Builtin(|eval, args| {
@@ -100,7 +108,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		} else {
 			std::io::stdout().flush()
 		}.map_err(|e|fmt_fs_error(e, "print"))?;
-		Ok(None)
+		Ok(BuiltinReturn::None)
 	}));
 
 	// --- Math ---
@@ -125,7 +133,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 						v @ _ => return Err(Error {message:format!("Argument {idx} to `+` is not a string or number: {:?}", v)})
 					}
 				}
-				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::String(s)))))
+				Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::String(s)))))
 			}
 			Value::Primitive(Primitive::Int(i)) => {
 				let mut i = i;
@@ -136,7 +144,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 						v @ _ => return Err(Error {message:format!("Argument {idx} to `+` is not a number: {:?}", v)})
 					}
 				}
-				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(i)))))
+				Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::Int(i)))))
 			}
 			// TODO: Value::Dict, Value::Array, local
 			v @ _ => Err(Error {message:format!("First argument to `+` unrecognized: {:?}", v)}) // TODO: Display not Debug
@@ -162,7 +170,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 								v @ _ => return Err(Error {message:format!("Argument {idx} to {} is not a number: {:?}", $name, v)})
 							}
 						}
-						Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(i)))))
+						Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::Int(i)))))
 					}
 					// TODO: Value::Dict, Value::Array, local
 					v @ _ => Err(Error {message:format!("First argument to `{}` unrecognized: {:?}", $name, v)}) // TODO: Display not Debug
@@ -185,7 +193,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		}
 		match (eval.memory.value(args[0].clone()), eval.memory.value(args[1].clone())) {
 			(Value::Primitive(Primitive::Int(i)), Value::Primitive(Primitive::Int(i2))) => {
-				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(i%i2)))))
+				Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::Int(i%i2)))))
 			}
 			// TODO: Value::Dict, Value::Array, local
 			v @ _ => Err(Error {message:format!("First argument to `%` unrecognized: {:?}", v)}) // TODO: Display not Debug
@@ -198,7 +206,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		}
 		match eval.memory.value(args[0].clone()) {
 			Value::Primitive(Primitive::Int(i)) => {
-				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(!i)))))
+				Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::Int(!i)))))
 			}
 			// TODO: Value::Dict, Value::Array, local
 			v @ _ => Err(Error {message:format!("Argument to integer `~` unrecognized: {:?}", v)}) // TODO: Display not Debug
@@ -212,7 +220,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		}
 		match eval.memory.value(args[0].clone()) {
 			Value::Primitive(Primitive::Int(i)) => {
-				Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(-i)))))
+				Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::Int(-i)))))
 			}
 			// TODO: Value::Dict, Value::Array, local
 			v @ _ => Err(Error {message:format!("Argument to numeric `neg` unrecognized: {:?}", v)}) // TODO: Display not Debug
@@ -225,8 +233,8 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 			_ => true
 		}
 	}
-	fn bool_to_handle(memory:&mut Memory, b:bool) -> Result<Option<MemHandle>, Error> {
-		Ok(Some(memory.value_new(if b {
+	fn bool_to_handle(memory:&mut Memory, b:bool) -> Result<BuiltinReturn, Error> {
+		Ok(BuiltinReturn::Value(memory.value_new(if b {
 			Value::Primitive(Primitive::True)
 		} else {
 			Value::Primitive(Primitive::Nil)
@@ -287,10 +295,10 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 							};
 							result = result ^ invert;
 							if !result {
-								return Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Nil)))) // Functionally I could return nil here but this is more "idiomatic"
+								return Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::Nil)))) // Functionally I could return nil here but this is more "idiomatic"
 							}
 						}
-						Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::True))))
+						Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::True))))
 					}
 					// TODO: Value::Dict, Value::Array, local
 					v @ _ => Err(Error {message:format!("First argument to `{}` unrecognized: {:?}", $name, v)}) // TODO: Display not Debug
@@ -375,10 +383,10 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		let value = match eval.memory.value(args[0].clone()) {
 			// v @ Value::Primitive(Primitive::Nil) => v // Bring back if cells can ever change
 			Value::Primitive(Primitive::Nil) | Value::Primitive(Primitive::True) =>
-				return Ok(Some(args[0].clone())), // Passthrough
+				return Ok(BuiltinReturn::Value(args[0].clone())), // Passthrough
 			_ => Value::Primitive(Primitive::True)
 		};
-		Ok(Some(eval.memory.value_new(value)))
+		Ok(BuiltinReturn::Value(eval.memory.value_new(value)))
 	}));
 
 	insert(memory, "to-int", Primitive::Builtin(|eval, args| {
@@ -388,12 +396,13 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		let value = match eval.memory.value(args[0].clone()) {
 		    Value::Primitive(Primitive::Nil) => Some(0),
 		    Value::Primitive(Primitive::True) => Some(1),
-		    //Value::Primitive(Primitive::Int(i)) => Some(i),
-		    Value::Primitive(Primitive::Int(_)) => return Ok(Some(args[0].clone())), // Passthrough
+		    //Value::Primitive(Primitive::Int(i)) => BuiltinReturn::Value(i),
+		    Value::Primitive(Primitive::Int(_)) => return Ok(BuiltinReturn::Value(args[0].clone())), // Passthrough
 		    Value::Primitive(Primitive::String(s)) => s.parse().ok(),
 			v @ _ => return Err(Error {message:format!("First argument to `to-int` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		};
-		Ok(value.map(|v|eval.memory.value_new(Value::Primitive(Primitive::Int(v)))))
+		let value = value.map(|v|eval.memory.value_new(Value::Primitive(Primitive::Int(v))));
+		Ok(option_to_value(value))
 	}));
 
 	insert(memory, "to-string", Primitive::Builtin(|eval, args| {
@@ -401,16 +410,16 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 			return Err(Error {message:format!("Expected exactly one argument to `to-int`")});
 		}
 		let value = match eval.memory.value(args[0].clone()) {
-		    Value::Primitive(Primitive::String(_)) => return Ok(Some(args[0].clone())),
+		    Value::Primitive(Primitive::String(_)) => return Ok(BuiltinReturn::Value(args[0].clone())),
 		    v @ _ => format!("{}", v)
 		};
-		Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::String(value)))))
+		Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::String(value)))))
 	}));
 
 	// --- Data ---
 
 	insert(memory, "make-array", Primitive::Builtin(|eval, args| {
-		Ok(Some(eval.memory.array_from_handles(args)))
+		Ok(BuiltinReturn::Value(eval.memory.array_from_handles(args)))
 	}));
 
 	// TODO: I don't like this and I'd rather some kinda '(pair) form
@@ -430,14 +439,14 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 				v @ _ => return Err(Error {message:format!("Argument {idx} (key #{}) to `make-dict` is not a primitive: {:?}", idx/2, v)}) // TODO: Display not Debug
 			}
 		}
-		Ok(Some(dict))
+		Ok(BuiltinReturn::Value(dict))
 	}));
 
 	insert(memory, "make-quote", Primitive::Builtin(|eval, args| {
 		if args.len() != 1 {
 			return Err(Error {message:"Expected exactly one argument to `make-quote`".to_string()});
 		}
-		Ok(Some(eval.memory.quote_new(args[0].clone())))
+		Ok(BuiltinReturn::Value(eval.memory.quote_new(args[0].clone())))
 	}));
 
 	insert(memory, "unquote", Primitive::Builtin(|eval, args| {
@@ -447,7 +456,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		match eval.memory.value(args[0].clone()) {
 			// Get variable from scope.
 			Value::Quote => {
-				Ok(Some(eval.memory.quote_get(args[0].clone())))
+				Ok(BuiltinReturn::Value(eval.memory.quote_get(args[0].clone())))
 			}
 			v @ _ => Err(Error {message:format!("First argument to `unquote` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		}
@@ -471,7 +480,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 			// TODO: Value::Dict, Value::Array, local
 			v @ _ => return Err(Error {message:format!("First argument to `len` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		};
-		Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::Int(len as i64)))))
+		Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::Int(len as i64)))))
 	}));
 
 	// FIXME merge with "get" above
@@ -517,7 +526,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 			// TODO: Value::Dict, Value::Array, local
 			v @ _ => return Err(Error {message:format!("First argument to `get` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		};
-		Ok(handle_option)
+		Ok(option_to_value(handle_option))
 	}));
 
 	insert(memory, "push", Primitive::Builtin(|eval, args| {
@@ -533,7 +542,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 			// TODO: Value::Dict, Value::Array, local
 			v @ _ => return Err(Error {message:format!("First argument to `push` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		};
-		Ok(None)
+		Ok(BuiltinReturn::None)
 	}));
 
 	insert(memory, "has", Primitive::Builtin(|eval, args| {
@@ -597,7 +606,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 			// TODO: local, maybe array?
 			v @ _ => return Err(Error {message:format!("First argument to `get` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		};
-		Ok(None)
+		Ok(BuiltinReturn::None)
 	}));
 
 	insert(memory, "truncate", Primitive::Builtin(|eval, args| {
@@ -618,7 +627,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 			}
 			v @ _ => return Err(Error {message:format!("First argument to `get` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		};
-		Ok(None)
+		Ok(BuiltinReturn::None)
 	}));
 
 	insert(memory, "keys", Primitive::Builtin(|eval, args| {
@@ -639,7 +648,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		};
 		let keys:Vec<MemHandle> = eval.memory.dict_keys(dict).into_iter().map(|x|eval.memory.value_new(Value::Primitive(x))).collect();
 		let handle = eval.memory.array_from_handles(&keys);
-		Ok(Some(handle))
+		Ok(BuiltinReturn::Value(handle))
 	}));
 
 	// --- inset/outset ---
@@ -674,7 +683,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 */
 			_ => return Err(Error {message:format!("Unrecognized arguments to `inset`")}) // TODO: Better errors
 		}
-		Ok(None)
+		Ok(BuiltinReturn::None)
 	}));
 
 	insert(memory, "outset", Primitive::Builtin(|eval, args| {
@@ -711,7 +720,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 */
 			_ => return Err(Error {message:format!("Unrecognized arguments to `inset`")}) // TODO: Better errors
 		}
-		Ok(None)
+		Ok(BuiltinReturn::None)
 	}));
 
 	// --- File ---
@@ -770,7 +779,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 				} else {
 					None
 				};
-				Ok(None)
+				Ok(BuiltinReturn::None)
 			}));
 		}
 	}
@@ -799,7 +808,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 			std::io::stdin().lock().lines().next()
 		};
 
-		s.map(|x|x.map(|s|eval.memory.value_new(Value::Primitive(Primitive::String(s)))).map_err(|e|fmt_fs_error(e, "read-line"))).transpose()
+		s.map(|x|x.map(|s|eval.memory.value_new(Value::Primitive(Primitive::String(s)))).map_err(|e|fmt_fs_error(e, "read-line"))).transpose().map(option_to_value)
 	}));
 
 	// CONSIDER: Is it correct that at EOF this returns "" instead of nil?
@@ -815,19 +824,19 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		};
 		result.map_err(|e|fmt_fs_error(e, "read-all"))?;
 
-		Ok(Some(eval.memory.value_new(Value::Primitive(Primitive::String(s)))))
+		Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::String(s)))))
 	}));
 
 	// --- Specials ---
 
-	insert(memory, "do", Primitive::SpecialBuiltin(|eval, args| {
+	insert(memory, "do", Primitive::Builtin(|eval, args| {
 		if args.len() != 1 {
 			return Err(Error {message:"`do` expects exactly 1 argument".to_string()});
 		}
-		Ok(SpecialResult::Push(vec![args[0].clone()]))
+		Ok(BuiltinReturn::Push(vec![args[0].clone()]))
 	}));
 
-	insert(memory, "apply", Primitive::SpecialBuiltin(|eval, args| {
+	insert(memory, "apply", Primitive::Builtin(|eval, args| {
 		if args.len() != 2 {
 			return Err(Error {message:"`apply` expects exactly 2 arguments".to_string()});
 		}
@@ -836,14 +845,14 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 				let mut array = vec![args[0].clone()];
 				array.append(&mut eval.memory.array_as_handles(args[1].clone()));
 
-				Ok(SpecialResult::Push(array))
+				Ok(BuiltinReturn::Push(array))
 			},
 			// TODO: Value::Dict, Value::Array, local
 			v @ _ => Err(Error {message:format!("Second argument to `apply` unrecognized: {:?}", v)}) // TODO: Display not Debug
 		}
 	}));
 
-	insert(memory, "if", Primitive::SpecialBuiltin(|eval, args| {
+	insert(memory, "if", Primitive::Builtin(|eval, args| {
 		let argsn = args.len();
 		if argsn < 2 {
 			return Err(Error {message:"Not enough arguments to `if`".to_string()});
@@ -853,18 +862,18 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		}
 		let cond = value_to_bool(eval.memory.value(args[0].clone()));
 		if cond {
-			Ok(SpecialResult::Push(vec![args[1].clone()]))
+			Ok(BuiltinReturn::Push(vec![args[1].clone()]))
 		} else if argsn > 3 {
 			match eval.memory.value(args[2].clone()) {
     			Value::Primitive(Primitive::Nil) => {
-    				Ok(SpecialResult::Push(vec![args[3].clone()]))
+    				Ok(BuiltinReturn::Push(vec![args[3].clone()]))
     			}
     			v @ _ => Err(Error {message:format!("Expected `else` as third argument to `if`, got: {:?}", v)})
 			}
 		} else if argsn > 2 {
-			Ok(SpecialResult::Push(vec![args[2].clone()]))
+			Ok(BuiltinReturn::Push(vec![args[2].clone()]))
 		} else {
-			Ok(SpecialResult::None)
+			Ok(BuiltinReturn::None)
 		}
 	}));
 
@@ -874,7 +883,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 
 	// Takes any number of arguments, returns nil.
 	insert(memory, "discard", Primitive::Builtin(|_, _| {
-		Ok(None)
+		Ok(BuiltinReturn::None)
 	}));
 
 	// Identity combinator: Takes one argument, returns it.
@@ -882,7 +891,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		if args.len() != 1 {
 			return Err(Error {message:"`return` expects exactly 1 argument".to_string()});
 		}
-		Ok(Some(args[0].clone()))
+		Ok(BuiltinReturn::Value(args[0].clone()))
 	}));
 
 	insert(memory, "fail", Primitive::Builtin(|eval, args| {

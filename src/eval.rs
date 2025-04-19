@@ -150,6 +150,10 @@ impl Eval {
 
 				            // Strings are treated as names, and read from the dynamic scope.
 				            name @ Primitive::String(_) => {
+				            	if TRACE_DEBUG { // Yes it's ugly, no there's not a better way to make the borrow checker happy
+					            	let readback = self.memory.dict_get(self.memory.globals.clone(), name.clone());
+				            		print!("[..Arg {} Decode: \"{}\" To: {}]", prepare.len(), name.clone(), if let Some(value) = readback { self.memory.value(value.clone())} else {Value::Primitive(Primitive::Int(404)) });
+				            	}
 				            	let readback = self.memory.dict_get(self.memory.globals.clone(), name);
 				            	if let Some(sub_item) = readback { // Found
 					            	PrepareNext::Push(sub_item)
@@ -269,7 +273,6 @@ impl Eval {
 					                    	if TRACE_DEBUG {
 	                							println!("[EVAL SPECIAL depth: {} returning: {returning}]", self.stack.len());
 					                    	}
-					                    	// This is not correct-- this reenters evaluation-- we want to reenter Execute()
 					                    	self.stack.push((returning,args_restore,None,None,handles));
 					                    	return_on_continue = true;
 					                    	continue 'execute;

@@ -70,4 +70,5 @@ io/lisp/file.ls0
 gc/fail/fill.ls0
 gc/fail/fill2.ls0
 
+../fizzbuzz.l0
 ../aoc/2024-day6-part1.l0

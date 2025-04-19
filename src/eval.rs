@@ -247,7 +247,7 @@ impl Eval {
 				    			(&carl[0], cdrl)
 				    		};
 		    				if TRACE_DEBUG {
-								print!("[EVAL EXEC depth: {} car {} cdrl {}: ", self.stack.len(), self.memory.value(car.clone()), cdr.len());
+								print!("[EVAL EXEC @{} depth: {} car {} cdrl {}: ", eformat!(true_fun(&self.stack, fun.clone()), ""), self.stack.len(), self.memory.value(car.clone()), cdr.len());
 								let mut first = false; for handle in cdr {
 									if !first { first = true; } else { print!(", ") }
 									print!("{}", self.memory.value(handle.clone()));

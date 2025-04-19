@@ -1,0 +1,45 @@
+# Takes 1 command line argument [default 10] and runs fizzbuzz up to that number.
+
+# AppArg: 20
+# Expect: 1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 Fizzbuzz 16 17 Fizz 19 Buzz
+
+# Usage if {conditional} {case}
+set 'while {
+	inset args '(_while_cond _while_body)
+	if (_while_cond) [ # Arrays because we are "precompiling" a function
+		[make-quote _while_body]
+		[make-quote while, make-quote _while_cond, make-quote _while_body]
+	]
+}
+
+# Fizzbuzz up to command line argument [default 10 if absent]
+set 'at 0
+set 'target (get args 0)
+
+if target {
+	set 'target (to-int target) # ARGV is strings...
+} else {
+	set 'target 10              # No ARGV
+}
+
+set '=0 { = 0 (get args 0) }
+
+while {< at target} {
+	set 'at (+ at 1)
+	set 'three (=0 (% at 3))
+	set 'five (=0 (% at 5))
+	print (if three {
+		if five {
+			"Fizzbuzz"
+		} else {
+			"Fizz"
+		}
+	} else {
+		if five {
+			"Buzz"
+		} else {
+			at
+		}
+	}) sp
+}
+print ln

@@ -1,0 +1,11 @@
+# Test lone mid-item safeguard
+# Expect failure
+
+set 'fn {
+	print 7
+	8 # This is legal in ls0 but NOT l0
+	print 9
+	10
+}
+
+print ln fn (fn) ln

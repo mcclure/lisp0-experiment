@@ -1,0 +1,32 @@
+# Test lone item
+# Expect: 3[nil][builtin]4
+# Expect: 5
+# Expect: [nil] [builtin] 6
+# Expect: 79
+# Expect: [array]10
+# Expect: 17191719
+# Expect: [array]3 
+
+(print (print 3) print 4 ln)
+
+(set 'ary (make-array (print 5) print 6))
+
+(print ln (get ary 0) sp (get ary 1) sp (get ary 2) ln)
+
+(set 'fn '(
+	(print 7)
+	8 # This is legal in ls0
+	(print 9)
+	10
+))
+
+(print ln fn (fn) ln)
+
+(set 'fn '(
+	(print 17)
+	8 # This is legal in ls0
+	(print 19)
+	ary
+))
+
+(print ln (fn) (len (fn)) ln)

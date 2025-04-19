@@ -9,8 +9,8 @@ set 'do-print {
 
 set 'x 1
 set 'y 2
-do-print
+do do-print
 
 set 'x 3
 set 'y 4
-do-print
+do do-print

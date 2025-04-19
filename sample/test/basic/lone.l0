@@ -1,0 +1,31 @@
+# Test lone item
+
+# Expect: 3[nil][builtin]4
+# Expect: 5
+# Expect: [nil] [builtin] 6
+# Expect: 7810
+# Expect: [array]9
+# Expect: [array][builtin]
+
+print (print 3) print 4 ln
+
+set 'ary [
+	print 5
+	print
+	6
+]
+
+print ln (get ary 0) sp (get ary 1) sp (get ary 2) ln
+
+set 'fn {
+	print 7
+	print 8
+	9
+}
+
+set 'fn2 {
+	print 10
+	print
+}
+
+print ln fn (fn) ln fn2 (fn2) ln

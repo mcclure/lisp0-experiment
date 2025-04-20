@@ -827,6 +827,146 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::String(s)))))
 	}));
 
+	// --- Functions ---
+
+	insert(memory, "fun", Primitive::Builtin(|eval, args| {
+		let argsn = args.len();
+		if argsn < 1 {
+			return Err(Error {message:format!("`fun` expects at least 1 argument")});
+		}
+		if argsn > 4 {
+			return Err(Error {message:format!("`fun` expects at most 4 arguments")});
+		}
+
+		// Notice unusual "left-side" optional arguments scheme
+		let spec_body = args[argsn-1].clone();
+		let spec_locals = if argsn>1 { Some(args[argsn-1].clone()) } else { None };
+		let spec_args = if argsn>2 { Some(args[argsn-1].clone()) } else { None };
+		let spec_name = if argsn>3 { Some(args[argsn-2].clone()) } else { None };
+
+		let fun_name = if let Some(handle) = &spec_name {
+			match eval.memory.value(handle.clone()) {
+				Value::Primitive(Primitive::String(s)) => Some(s),
+				v @ _ => return Err(Error {message:format!("Unrecognized name for `fun`: {}", v)})
+			}
+		} else {
+			None
+		};
+
+		// Convert None spec_args to nil, throw on nonsense spec_args
+		let fun_args = if let Some(args) = &spec_args {
+			match eval.memory.value(args.clone()) {
+				Value::Primitive(Primitive::Nil) => args.clone(),
+				Value::Array =>	{
+					let filtered = eval.memory.array_new();
+					for idx in 0..eval.memory.array_len(args.clone()) {
+						let item = eval.memory.array_get(args.clone(), idx).unwrap();
+						let bad = |eval:&Eval, item| Err(Error {message:format!("`fun` args item {idx} unrecognized: {:?}", eval.memory.value(item))});
+						match eval.memory.value(item.clone()) {
+							Value::Primitive(Primitive::String(_)) => {
+								let nil = eval.memory.nil();
+								let sub_item = eval.memory.array_from_handles(&[item.clone(), nil]);
+								eval.memory.array_push(filtered.clone(), sub_item);
+							}
+							Value::Array => {
+								if 2 != eval.memory.array_len(item.clone()) { return bad(&eval, item.clone()); }
+								let sub_item = eval.memory.array_get(item.clone(), 0).unwrap();
+								if !matches!(eval.memory.value(sub_item.clone()), Value::Primitive(Primitive::String(_))) {
+									return bad(&eval, item.clone());
+								}
+								eval.memory.array_push(filtered.clone(), sub_item.clone());
+							}
+							_ =>
+								return bad(&eval, item.clone())
+						}
+					}
+					filtered
+				}
+				_ => {
+					return Err(Error {message:format!("`fun` expects array for arguments")});
+				}
+			}
+		} else {
+			eval.memory.nil()
+		};
+
+		let fun_locals = if let Some(locals) = &spec_locals {
+			match eval.memory.value(locals.clone()) {
+				Value::Primitive(Primitive::Nil) |
+				Value::Dict => locals.clone(), // FIXME: sanity check?
+				Value::Array =>	{
+					let filtered = eval.memory.dict_new();
+					for idx in 0..eval.memory.array_len(locals.clone()) {
+						let item = eval.memory.array_get(locals.clone(), idx).unwrap();
+						let bad = |eval:&Eval, item| Err(Error {message:format!("`fun` locals item {idx} unrecognized: {:?}", eval.memory.value(item))});
+						match eval.memory.value(item.clone()) {
+							Value::Primitive(k @ Primitive::String(_)) => {
+								eval.memory.dict_set(filtered.clone(), k, item.clone());
+							}
+							Value::Array => {
+								let [key, value] = &eval.memory.array_as_handles(item.clone())[..] else {
+									return bad(&eval, item.clone())
+								};
+								let key = match eval.memory.value(key.clone()) {
+									Value::Primitive(p @ Primitive::String(_)) => p,
+									v @ _ =>
+										return Err(Error {message:format!("`fun` locals item {idx}, key is not a string: {:?}", v)})
+								};
+								eval.memory.dict_set(filtered.clone(), key, value.clone());
+							}
+							_ =>
+								return bad(&eval, item.clone())
+
+						}
+					}
+					filtered
+				}
+				_ => return Err(Error {message:format!("`fun` expects array or dict for locals")})
+			}
+		} else {
+			eval.memory.nil()
+		};
+
+		// Build spec_args
+		let (fun_args, fun_locals) = match eval.memory.value(spec_body.clone()) {
+			Value::Array => {
+				(fun_args, fun_locals)
+			}
+			Value::Fun => {
+				let spec_fun = eval.memory.fun_unpack(spec_body.clone());
+				let fun_args =
+					match (eval.memory.value(spec_fun.args.clone()), eval.memory.value(fun_args.clone())) {
+						(Value::Array, Value::Primitive(Primitive::Nil)) => spec_fun.args.clone(),
+						(Value::Primitive(Primitive::Nil), Value::Array) |
+						(Value::Primitive(Primitive::Nil), Value::Primitive(Primitive::Nil)) =>
+							fun_args.clone(),
+						_ => return Err(Error {message:format!("`fun` given non-nil array, but body is a fun that already has an array")})
+					};
+				let fun_locals =
+					match (eval.memory.value(spec_fun.locals.clone()), eval.memory.value(fun_locals.clone())) {
+						(Value::Dict, Value::Primitive(Primitive::Nil)) =>
+							eval.memory.dict_clone(spec_fun.locals.clone()),
+						(Value::Primitive(Primitive::Nil), Value::Dict) |
+						(Value::Primitive(Primitive::Nil), Value::Primitive(Primitive::Nil)) =>
+							fun_locals.clone(),
+						(Value::Dict, Value::Dict) => {
+							let filtered = eval.memory.dict_clone(spec_fun.locals.clone());
+							eval.memory.dict_pull(filtered.clone(), fun_locals);
+							filtered
+						}
+						_ => panic!("Interpreter internal error") // Unreachable?
+					};
+
+				(fun_args, fun_locals)
+			}
+			_ => return Err(Error {message:format!("`fun` expects array for body")})
+		};
+
+		Ok(BuiltinReturn::Value(eval.memory.fun_new(
+			crate::memory::Fun {name:fun_name, args: fun_args, locals: fun_locals, body: spec_body}
+		)))
+	}));
+
 	// --- Specials ---
 
 	insert(memory, "do", Primitive::Builtin(|eval, args| {

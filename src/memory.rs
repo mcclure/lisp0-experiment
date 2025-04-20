@@ -5,7 +5,7 @@
 
 use crate::reader::{AstContent, AstNode, ReaderPosition};
 use crate::eval;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
@@ -53,7 +53,16 @@ pub enum Value {
 	Primitive(Primitive),
 	Quote,
 	Array,
-	Dict
+	Dict,
+	Fun
+}
+
+#[derive(Clone)]
+pub struct Fun {
+	pub name:Option<String>,
+	pub args: MemHandle,
+	pub locals: MemHandle,
+	pub body: MemHandle
 }
 
 impl fmt::Display for Value {
@@ -68,6 +77,7 @@ impl fmt::Display for Value {
             Value::Quote => write!(f, "[quote]"),
             Value::Array => write!(f, "[array]"), // TODO: size would be nice.
             Value::Dict => write!(f, "[dict]"),
+            Value::Fun => write!(f, "[fun]"),
         }
     }
 }
@@ -81,6 +91,7 @@ enum MemCell {
 	// Wacky: Every array knows what line it was made on? Fits in 56 byte rule but should this be a Feature?
 	Array(ReaderPosition, Vec<MemAddr>),
 	Dict(HashMap<Primitive, MemAddr>),
+	Fun { name:Option<String>, args: MemAddr, locals: MemAddr, body: MemAddr },
 	Forward(MemAddr) // Used during GC only
 }
 
@@ -129,6 +140,7 @@ pub struct Memory {
 
 impl Memory {
 	pub fn new_sized(starting_size:usize) -> Self {
+		println!("MemCell size: {}", std::mem::size_of::<MemCell>());
 		let mut space0:MemSpace = Vec::with_capacity(starting_size);;
 		space0.push(MemCell::Dict(Default::default()));
 		let mut handle_table = MemHandleTable::default();
@@ -210,6 +222,9 @@ impl Memory {
 				        	for addr in hash_map.values_mut() {
 				        		*addr = forward_one(space_from, space_to, *addr, &mut todo, true);
 				        	}
+				        }
+				        MemCell::Fun {..} => {
+				        	todo!();
 				        }
 				        MemCell::Forward(_) => panic!("Interpreter internal error during GC"),
 				    }
@@ -334,6 +349,7 @@ impl Memory {
 			MemCell::Quote(_) => Value::Quote,
 			MemCell::Array(_, _) => Value::Array,
 			MemCell::Dict(_) => Value::Dict,
+			MemCell::Fun{..} => Value::Fun,
 			MemCell::Forward(_) => panic!("Memory corruption detected")
 		}
 	}
@@ -346,6 +362,11 @@ impl Memory {
 			Value::Quote => MemCell::Quote(self.alloc_internal(MemCell::Primitive(Primitive::Nil))),
 			Value::Array => MemCell::Array(Default::default(), Default::default()),
 			Value::Dict => MemCell::Array(Default::default(), Default::default()),
+			Value::Fun => {
+				let nil = self.nil();
+				let addr = self.handle_to_addr(nil);
+				MemCell::Fun { name:None, args:addr, locals:addr, body:addr }
+			}
 		}
 	}
 
@@ -394,6 +415,11 @@ impl Memory {
 		let cell = self.cell_mut(handle);
 		let MemCell::Quote(addr) = cell else { panic!("Expected quote") };
 		*addr = addr2;
+	}
+
+	pub fn quote_clone(&mut self, handle:MemHandle) -> MemHandle {
+		let inner = self.quote_get(handle); // "Safe" but could be more efficient..
+		self.quote_new(inner)
 	}
 
 	pub fn array_new(&mut self) -> MemHandle {
@@ -476,6 +502,11 @@ impl Memory {
 		ary.truncate(len);
 	}
 
+	pub fn array_clone(&mut self, handle:MemHandle) -> MemHandle {
+		let inner = self.array_as_handles(handle); // "Safe" but could be more efficient..
+		self.array_from_handles(&inner)
+	}
+
 	pub fn dict_new(&mut self) -> MemHandle {
 		let cell = self.alloc_internal(MemCell::Dict(Default::default()));
 		self.handle_new(cell)
@@ -493,7 +524,6 @@ impl Memory {
 		dict.contains_key(&key)
 	}
 
-	// TODO: dict_size, dict_keys
 	pub fn dict_get(&mut self, handle:MemHandle, key:Primitive) -> Option<MemHandle> {
 		let cell = self.cell_mut(handle);
 		let MemCell::Dict(dict) = cell else { panic!("Expected dict") };
@@ -530,5 +560,47 @@ impl Memory {
 		let cell = self.cell_mut(handle);
 		let MemCell::Dict(dict) = cell else { panic!("Expected dict") };
 		dict.keys().map(|x|x.clone()).collect()
+	}
+
+	pub fn dict_pull(&mut self, handle_dst:MemHandle, handle_src:MemHandle) {
+		let keys = self.dict_keys(handle_src.clone()); // "Safe" but could be more efficient..
+		for key in keys {
+			let value = self.dict_get(handle_src.clone(), key.clone()).unwrap();
+			self.dict_set(handle_dst.clone(), key, value);
+		}
+	}
+
+	pub fn dict_clone(&mut self, handle:MemHandle) -> MemHandle {
+		let dict = self.dict_new();
+		self.dict_pull(dict.clone(), handle);
+		dict
+	}
+
+	pub fn fun_new(&mut self, fun:Fun) -> MemHandle {
+		let handle = self.value_new(Value::Fun);
+		let cell2 = MemCell::Fun {
+			name:fun.name.clone(),
+			args:self.handle_to_addr(fun.args),
+			locals:self.handle_to_addr(fun.locals),
+			body: self.handle_to_addr(fun.body)
+		};
+		{
+			let cell = self.cell_mut(handle.clone());
+			*cell = cell2;
+		}
+		handle
+	}
+
+	pub fn fun_unpack(&mut self, handle:MemHandle) -> Fun {
+		let (name, args, locals, body) = {
+			let cell = self.cell(handle);
+			let MemCell::Fun { name, args, locals, body } = cell else { panic!("Expected dict") };
+			(name.clone(), *args, *locals, *body)
+		};
+		let args = self.handle_new(args);
+		let locals = self.handle_new(locals);
+		let body = self.handle_new(body);
+
+		Fun { name, args, locals, body }
 	}
 }

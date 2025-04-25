@@ -408,11 +408,20 @@ impl Eval {
 							let restore_keys = self.memory.dict_keys(scope_restore.clone());
 							for key in restore_keys {
 								let value = self.memory.dict_get(scope_restore.clone(), key.clone()).unwrap();
+								let is_hole = self.memory.is_hole(value.clone());
+
+								if TRACE_DEBUG {
+									if is_hole {
+										print!("{}:[del], ", key.clone());
+									} else {
+										print!("{}:{}, ", key.clone(), self.memory.value(value.clone()));
+									}
+								}
 
 								if self.memory.is_hole(value.clone()) {
-									self.memory.dict_del(scope_restore.clone(), key);
+									self.memory.dict_del(self.memory.globals.clone(), key);
 								} else {
-									self.memory.dict_set(scope_restore.clone(), key, value);
+									self.memory.dict_set(self.memory.globals.clone(), key, value);
 								}
 							}
 					    }

@@ -247,7 +247,7 @@ impl Eval {
 				    			(&carl[0], cdrl)
 				    		};
 		    				if TRACE_DEBUG {
-								print!("[EVAL EXEC @{} depth: {} car {} cdrl {}: ", eformat!(true_fun(&self.stack, fun.clone()), ""), self.stack.len(), self.memory.value(car.clone()), cdr.len());
+								print!("[EVAL EXEC @{} depth: {} car {} cdrl {}: ", if self.stack.len()>0 { eformat!(true_fun(&self.stack, fun.clone()), "") } else { "???".to_string() }, self.stack.len(), self.memory.value(car.clone()), cdr.len());
 								let mut first = false; for handle in cdr {
 									if !first { first = true; } else { print!(", ") }
 									print!("{}", self.memory.value(handle.clone()));
@@ -312,10 +312,12 @@ impl Eval {
 									self.memory.dict_set(self.memory.globals.clone(), args_str!(), args);
 */
 									if TRACE_DEBUG {
-										print!("[EVAL DESCEND B depth: {} carl: {} SR? {}", self.stack.len(), self.memory.array_len(car.clone()), scope_restore.is_some());
+										print!("[EVAL DESCEND B depth: {} carl: {} SR? {}]", self.stack.len(), self.memory.array_len(car.clone()), scope_restore.is_some());
 									}
 
-									self.stack.push((returning,scope_restore.clone(),Some(car.clone()),Some(0),Default::default()));
+									let scope_restore = std::mem::take(&mut scope_restore); // Yoinks scope_restore if tail recursing, or yoinks "None" and is a noop
+
+									self.stack.push((returning,scope_restore,Some(car.clone()),Some(0),Default::default()));
 								},
 								Value::Fun => {
 									// Fiddle with old_args if it exists and we're replacing
@@ -350,7 +352,10 @@ impl Eval {
 											}
 										}
 
-										let scope_restore = scope_restore.clone().unwrap_or_else(|| self.memory.dict_new());
+										// If scope restore none: Make a dict
+										// If scope restore present (if tail recursing): merge our scope in
+										let scope_restore = std::mem::take(&mut scope_restore)
+											.unwrap_or_else(|| self.memory.dict_new());
 
 										if !no_locals {
 											let locals_keys = self.memory.dict_keys(call_fun.locals.clone());

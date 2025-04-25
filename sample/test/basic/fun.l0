@@ -66,24 +66,40 @@ print 8 sp a sp b sp c ln
 
 # Recursion-- use do shorthand
 # Expect: 9 3 2 1 0 1 2 3
-# Expect: 6 aye6 bee3 6 dee4
+# Expect: 6 aye6 bee3 6 dee5
 
 print 9
 
-do 'ef {c 3} {} {
+do 'e {c 3} {} {
 	print sp c
 	if (> c 0) {
-		ef (- c 1)
+		e (- c 1)
 		print sp c
 	}
 }
 
+print ln
 e "aye6" "dee5"
 
-# Recusion-- use set-fn
-# Expect: 9 7 6 7 4 7 2 7 0 9 2 11 4 13 6
+# Same as last case but now e call is tail recursive
+# Expect: 10 3 2 1 0
+# Expect: 6 aye7 bee3 6 dee6
 
 print 10
+do 'e {c 3} {} {
+	print sp c
+	if (> c 0) {
+		e (- c 1)
+	}
+}
+
+print ln
+e "aye7" "dee6"
+
+# Recusion-- use set-fn
+# Expect: 11 7 6 7 4 7 2 7 0 9 2 11 4 13 6
+
+print 11
 set-fn 'e {c} {d 7} {
 	print sp d sp c
 	set 'd (+ d c)
@@ -95,6 +111,7 @@ set-fn 'e {c} {d 7} {
 }
 
 e 6
+print ln
 
 # ---- Terrible or unintended mechanics
 

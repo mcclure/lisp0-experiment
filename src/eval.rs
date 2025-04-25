@@ -11,7 +11,7 @@ use std::fmt;
 pub enum BuiltinReturn {
 	None,
 	Value(MemHandle),
-	Push(Vec<MemHandle>)
+	Push(Vec<MemHandle>) // The vec is a "prepared" line; that is, it doesn't do variable lookups or nested calls.
 }
 
 pub type Builtin = fn(&mut Eval, &[MemHandle]) -> Result<BuiltinReturn, Error>;

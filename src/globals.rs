@@ -1016,9 +1016,9 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		// This is a bad way to do it because if set shadows, it will break.
 		// TODO: associate some builtins with number indices.
 		let set = eval.memory.dict_get(eval.memory.globals.clone(), Primitive::String("set".to_string())).unwrap();
-		let quote = eval.memory.quote_new(args[0].clone());
+		let value = args[0].clone();
 
-		Ok(BuiltinReturn::Push(vec![set, quote, fun]))
+		Ok(BuiltinReturn::Push(vec![set, value, fun]))
 	}));
 
 	insert(memory, "do", Primitive::Builtin(|eval, args| {

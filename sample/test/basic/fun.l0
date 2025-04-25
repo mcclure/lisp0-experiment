@@ -38,7 +38,7 @@ e "aye3" "dee2"
 set-fn 'e {a, d} {c 8} {
 	set 'c 6
 	set 'b "bee3"
-	print 6 a sp b sp c sp d ln
+	print 6 sp a sp b sp c sp d ln
 }
 
 print 5 sp a sp b sp c ln
@@ -46,14 +46,18 @@ print 5 sp a sp b sp c ln
 e "aye4" "dee3"
 
 # Use do shorthand
-# Expect: 7 aye bee4 7 11 [fn]
+# Expect: 7 aye bee4 7 11 [fn] [fn]
 # Expect: 6 aye5 bee3 6 dee4
 # Expect: 8 aye bee3 cee
 
 do 'e {c 14, d 11} {
 	set 'c 7
 	set 'b "bee4"
-	print 7 sp a sp b sp c sp d sp e ln
+	print 7 sp a sp b sp c sp d sp e
+}
+
+do 'ffg { # Did you really print yourself just now, or the captured e?
+	print sp ffg ln
 }
 
 e "aye5" "dee4"
@@ -65,19 +69,16 @@ print 8 sp a sp b sp c ln
 # Expect: 6 aye6 bee3 6 dee4
 
 print 9
-# Todo Rename ef to e
-# FIXME recursion is losing scope restore
-set 'ef e
 
 do 'ef {c 3} {} {
 	print sp c
 	if (> c 0) {
-		e (- c 1)
+		ef (- c 1)
 		print sp c
 	}
 }
-print "---fn---" # Remove this line
-ef "aye6" "dee5"
+
+e "aye6" "dee5"
 
 # Recusion-- use set-fn
 # Expect: 9 7 6 7 4 7 2 7 0 9 2 11 4 13 6

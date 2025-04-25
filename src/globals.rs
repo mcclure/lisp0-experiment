@@ -829,30 +829,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 
 	// --- Functions ---
 
-	insert(memory, "fun", Primitive::Builtin(|eval, args| {
-		let argsn = args.len();
-		if argsn < 1 {
-			return Err(Error {message:format!("`fun` expects at least 1 argument")});
-		}
-		if argsn > 4 {
-			return Err(Error {message:format!("`fun` expects at most 4 arguments")});
-		}
-
-		// Notice unusual "left-side" optional arguments scheme
-		let spec_body = args[argsn-1].clone();
-		let spec_locals = if argsn>1 { Some(args[argsn-1].clone()) } else { None };
-		let spec_args = if argsn>2 { Some(args[argsn-1].clone()) } else { None };
-		let spec_name = if argsn>3 { Some(args[argsn-2].clone()) } else { None };
-
-		let fun_name = if let Some(handle) = &spec_name {
-			match eval.memory.value(handle.clone()) {
-				Value::Primitive(Primitive::String(s)) => Some(s),
-				v @ _ => return Err(Error {message:format!("Unrecognized name for `fun`: {}", v)})
-			}
-		} else {
-			None
-		};
-
+	fn fun_impl(name: &str, eval: &mut Eval, spec_body:MemHandle, spec_locals:Option<MemHandle>, spec_args:Option<MemHandle>, fun_name:Option<String>) -> Result<BuiltinReturn, Error> {
 		// Convert None spec_args to nil, throw on nonsense spec_args
 		let fun_args = if let Some(args) = &spec_args {
 			match eval.memory.value(args.clone()) {
@@ -861,7 +838,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 					let filtered = eval.memory.array_new();
 					for idx in 0..eval.memory.array_len(args.clone()) {
 						let item = eval.memory.array_get(args.clone(), idx).unwrap();
-						let bad = |eval:&Eval, item| Err(Error {message:format!("`fun` args item {idx} unrecognized: {:?}", eval.memory.value(item))});
+						let bad = |eval:&Eval, item| Err(Error {message:format!("`{name}` \"args\" list, item {idx} unrecognized: {:?}", eval.memory.value(item))});
 						match eval.memory.value(item.clone()) {
 							Value::Primitive(Primitive::String(_)) => {
 								let nil = eval.memory.nil();
@@ -869,12 +846,13 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 								eval.memory.array_push(filtered.clone(), sub_item);
 							}
 							Value::Array => {
-								if 2 != eval.memory.array_len(item.clone()) { return bad(&eval, item.clone()); }
+								let itemn = eval.memory.array_len(item.clone());
+								if 2 != itemn { return Err(Error {message:format!("`{name}` \"args\" list, item {idx} is not a pair (len {itemn})")}) }
 								let sub_item = eval.memory.array_get(item.clone(), 0).unwrap();
 								if !matches!(eval.memory.value(sub_item.clone()), Value::Primitive(Primitive::String(_))) {
 									return bad(&eval, item.clone());
 								}
-								eval.memory.array_push(filtered.clone(), sub_item.clone());
+								eval.memory.array_push(filtered.clone(), item.clone());
 							}
 							_ =>
 								return bad(&eval, item.clone())
@@ -882,8 +860,8 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 					}
 					filtered
 				}
-				_ => {
-					return Err(Error {message:format!("`fun` expects array for arguments")});
+				v @ _ => {
+					return Err(Error {message:format!("`{name}` expects array for arguments, got: {:?}", v)});
 				}
 			}
 		} else {
@@ -898,7 +876,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 					let filtered = eval.memory.dict_new();
 					for idx in 0..eval.memory.array_len(locals.clone()) {
 						let item = eval.memory.array_get(locals.clone(), idx).unwrap();
-						let bad = |eval:&Eval, item| Err(Error {message:format!("`fun` locals item {idx} unrecognized: {:?}", eval.memory.value(item))});
+						let bad = |eval:&Eval, item| Err(Error {message:format!("`{name}` locals item {idx} unrecognized: {:?}", eval.memory.value(item))});
 						match eval.memory.value(item.clone()) {
 							Value::Primitive(k @ Primitive::String(_)) => {
 								eval.memory.dict_set(filtered.clone(), k, item.clone());
@@ -910,7 +888,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 								let key = match eval.memory.value(key.clone()) {
 									Value::Primitive(p @ Primitive::String(_)) => p,
 									v @ _ =>
-										return Err(Error {message:format!("`fun` locals item {idx}, key is not a string: {:?}", v)})
+										return Err(Error {message:format!("`{name}` locals item {idx}, key is not a string: {:?}", v)})
 								};
 								eval.memory.dict_set(filtered.clone(), key, value.clone());
 							}
@@ -921,7 +899,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 					}
 					filtered
 				}
-				_ => return Err(Error {message:format!("`fun` expects array or dict for locals")})
+				_ => return Err(Error {message:format!("`{name}` expects array or dict for locals")})
 			}
 		} else {
 			eval.memory.nil()
@@ -940,7 +918,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 						(Value::Primitive(Primitive::Nil), Value::Array) |
 						(Value::Primitive(Primitive::Nil), Value::Primitive(Primitive::Nil)) =>
 							fun_args.clone(),
-						_ => return Err(Error {message:format!("`fun` given non-nil array, but body is a fun that already has an array")})
+						_ => return Err(Error {message:format!("`fn` given non-nil array, but body is a fn that already has an array")})
 					};
 				let fun_locals =
 					match (eval.memory.value(spec_fun.locals.clone()), eval.memory.value(fun_locals.clone())) {
@@ -959,22 +937,104 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 
 				(fun_args, fun_locals)
 			}
-			_ => return Err(Error {message:format!("`fun` expects array for body")})
+			_ => return Err(Error {message:format!("`fn` expects array for body")})
 		};
 
 		Ok(BuiltinReturn::Value(eval.memory.fun_new(
 			crate::memory::Fun {name:fun_name, args: fun_args, locals: fun_locals, body: spec_body}
 		)))
+	}
+
+	fn fun_impl_default_arguments(name:&str, eval: &mut Eval, args:&[MemHandle])  -> Result<BuiltinReturn, Error> {
+		let argsn = args.len();
+		if argsn < 1 {
+			return Err(Error {message:format!("`{name}` expects at least 1 argument")});
+		}
+		if argsn > 4 {
+			return Err(Error {message:format!("`{name}` expects at most 4 arguments")});
+		}
+
+		// Notice unusual "folding" left-side optional arguments scheme. This code is too complicated :(
+		let spec_body = args[argsn-1].clone();
+		let (spec_locals, spec_args, fun_name) = if argsn == 1 {
+			(None, None, None)
+		} else {
+			let n_2 = args[argsn-2].clone();
+			if argsn == 2 {
+				if let Value::Primitive(Primitive::String(s)) = eval.memory.value(n_2.clone()) {
+					(None, None, Some(s))
+				} else {
+					(Some(n_2), None, None)
+				}
+			} else {
+				let n_3 = args[argsn-3].clone();
+				if argsn == 3 {
+					if let Value::Primitive(Primitive::String(s)) = eval.memory.value(n_3.clone()) {
+						(Some(n_2), None, Some(s))
+					} else {
+						(Some(n_2), Some(n_3), None)
+					}
+				} else {
+					match eval.memory.value(args[0].clone()) {
+						Value::Primitive(Primitive::String(s)) => (Some(n_2), Some(n_3), Some(s)),
+						v @ _ => return Err(Error {message:format!("Unrecognized name for `{name}`: {}", v)})
+					}
+				}
+			}
+		};
+
+		fun_impl(name, eval, spec_body, spec_locals, spec_args, fun_name)
+	}
+
+	// TODO: In case of local defaults, re-execute to get values
+	insert(memory, "fn", Primitive::Builtin(|eval, args| {
+		fun_impl_default_arguments("fn", eval, args)
+	}));
+
+	insert(memory, "set-fn", Primitive::Builtin(|eval, args| {
+		let argsn = args.len();
+		if argsn < 2 {
+			return Err(Error {message:format!("`fn` expects at least 2 arguments")});
+		}
+		if argsn > 4 {
+			return Err(Error {message:format!("`fn` expects at most 4 arguments")});
+		}
+
+		let fun_name = match eval.memory.value(args[0].clone()) {
+			Value::Primitive(Primitive::String(s)) => Some(s),
+			v @ _ => return Err(Error {message:format!("Unrecognized name for `set-fn`: {}", v)})
+		};
+
+		// Notice unusual "left-side" optional arguments scheme
+		let spec_body = args[argsn-1].clone();
+		let spec_locals = if argsn>2 { Some(args[argsn-2].clone()) } else { None };
+		let spec_args = if argsn>3 { Some(args[argsn-3].clone()) } else { None };
+
+		let fun = fun_impl("set-fn", eval, spec_body, spec_locals, spec_args, fun_name)?;
+		let BuiltinReturn::Value(fun) = fun else { panic!("Interpreter internal error"); };
+
+		// This is a bad way to do it because if set shadows, it will break.
+		// TODO: associate some builtins with number indices.
+		let set = eval.memory.dict_get(eval.memory.globals.clone(), Primitive::String("set".to_string())).unwrap();
+		let quote = eval.memory.quote_new(args[0].clone());
+
+		Ok(BuiltinReturn::Push(vec![set, quote, fun]))
+	}));
+
+	insert(memory, "do", Primitive::Builtin(|eval, args| {
+		// Simple case: It's just a block. It's just a block!
+		if args.len() == 1 {
+			return Ok(BuiltinReturn::Push(vec![args[0].clone()]))
+		}
+
+		// Otherwise, simulate calling fn and invoking the result immediately.
+		let fun = fun_impl_default_arguments("fn", eval, args)?;
+		let BuiltinReturn::Value(fun) = fun else { panic!("Interpreter internal error"); };
+
+		Ok(BuiltinReturn::Push(vec![fun]))
 	}));
 
 	// --- Specials ---
-
-	insert(memory, "do", Primitive::Builtin(|eval, args| {
-		if args.len() != 1 {
-			return Err(Error {message:"`do` expects exactly 1 argument".to_string()});
-		}
-		Ok(BuiltinReturn::Push(vec![args[0].clone()]))
-	}));
 
 	insert(memory, "apply", Primitive::Builtin(|eval, args| {
 		if args.len() != 2 {

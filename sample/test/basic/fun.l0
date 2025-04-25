@@ -1,16 +1,114 @@
-# Check if functions are being called (no args)
-# Expect: 1 2
-# Expect: 3 4
+# Tests for the various function syntax option
+# (Expects interleaved)
 
-set 'do-print {
-	set 'z x
-	print z sp y ln
+set 'a "aye"
+set 'b "bee"
+set 'c "cee"
+
+# Call function by itself
+# Expect: 1 aye bee cee
+# Expect: 2 aye2 bee 3 dee
+
+print 1 sp a sp b sp c ln
+
+(fn {a, d} {c 3} {
+	print 2 sp a sp b sp c sp d ln
+	set 'c 4
+}) "aye2" "dee"
+
+
+# Set function in a variable, then call it
+# Expect: 3 aye bee cee [fn]
+# Expect: 4 aye3 bee2 5 dee2 [fn]
+
+set 'e (fn {a, d} {c 9} {
+	set 'c 5
+	set 'b "bee2"
+	print 4 sp a sp b sp c sp d sp e ln
+})
+
+print 3 sp a sp b sp c sp e ln
+
+e "aye3" "dee2"
+
+# Use set-fn shorthand
+# Expect: 5 aye bee2 cee
+# Expect: 6 aye4 bee3 6 dee3
+
+set-fn 'e {a, d} {c 8} {
+	set 'c 6
+	set 'b "bee3"
+	print 6 a sp b sp c sp d ln
 }
 
-set 'x 1
-set 'y 2
-do do-print
+print 5 sp a sp b sp c ln
 
-set 'x 3
-set 'y 4
-do do-print
+e "aye4" "dee3"
+
+# Use do shorthand
+# Expect: 7 aye bee4 7 11 [fn]
+# Expect: 6 aye5 bee3 6 dee4
+# Expect: 8 aye bee3 cee
+
+do 'e {c 14, d 11} {
+	set 'c 7
+	set 'b "bee4"
+	print 7 sp a sp b sp c sp d sp e ln
+}
+
+e "aye5" "dee4"
+
+print 8 sp a sp b sp c ln
+
+# Recursion-- use do shorthand
+# Expect: 9 3 2 1 0 1 2 3
+# Expect: 6 aye6 bee3 6 dee4
+
+print 9
+# Todo Rename ef to e
+# FIXME recursion is losing scope restore
+set 'ef e
+
+do 'ef {c 3} {} {
+	print sp c
+	if (> c 0) {
+		e (- c 1)
+		print sp c
+	}
+}
+print "---fn---" # Remove this line
+ef "aye6" "dee5"
+
+# Recusion-- use set-fn
+# Expect: 9 7 6 7 4 7 2 7 0 9 2 11 4 13 6
+
+print 10
+set-fn 'e {c} {d 7} {
+	print sp d sp c
+	set 'd (+ d c)
+	if (> c 0) {
+		e (- c 2)
+		print sp d sp c
+	}
+	set 'd (+ d 20) # noop
+}
+
+e 6
+
+# ---- Terrible or unintended mechanics
+
+# Recursion inner shadowing
+# Expect: IS 5 8 3
+
+set-fn 'e {f, g} nil {
+	set 'b 3
+	g f
+}
+
+do {b} {
+	set 'b 5
+	print "IS " b sp
+	e 8 (fn {e} {} {
+		print e sp b ln
+	})
+}

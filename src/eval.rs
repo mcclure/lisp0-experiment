@@ -40,12 +40,13 @@ fn position_string(memory: &Memory, source_tag:&reader::SourceTag, handle:MemHan
 	}
 }
 
+// want-return?, restore-stack-on-return, function-or-line, linenum-at, line-in-progress
 type StackFrame = (bool, Option<MemHandle>, Option<MemHandle>, Option<usize>, Vec<MemHandle>);
 
 pub struct Eval {
 	pub memory: Memory,
 	pub source_tag: reader::SourceTag,
-	stack: Vec<StackFrame>, // want-return?, restore-arg-on-return, function, linenum-at, line-in-progress
+	stack: Vec<StackFrame>,
 
 	// Scratch space for globals.rs
 	pub file_allow: bool,
@@ -177,8 +178,7 @@ impl Eval {
 				        	// But we'll have to defer that to the next loop iteration…
 				        	break 'prepare StackNext::Push(item)
 				        }
-				        // FIXME: Inappropriate?
-				        Value::Dict => {
+				        Value::Fun | Value::Dict => { // FIXME: Is dict inappropriate?
 				        	PrepareNext::Push(item)
 				        },
 				    };
@@ -216,15 +216,15 @@ impl Eval {
 				    	let returning = return_on_continue;
 
 				    	// Peel a layer off the stack (we might push the first three values back later but prepare we'll consume)
-				    	let (want_return,args_restore,fun,line_num,prepare) = self.stack.pop().unwrap(); // Consider making unwrap unsafe
+				    	let (want_return,scope_restore,fun,line_num,prepare) = self.stack.pop().unwrap(); // Consider making unwrap unsafe
 				    	let mut returned:Option<MemHandle> = None; // Will only be populated if returning
 
-				    	// The odd construction here is because one branch of this if "eats" args_restore
-				    	let mut args_restore = if returning {
-				    		args_restore
+				    	// The odd construction here is because one branch of this `if` "eats" scope_restore
+				    	let mut scope_restore = if returning {
+				    		scope_restore
 				    	} else {
 				    		// More lines to execute in this function! Should not have popped
-				    		self.stack.push((want_return,args_restore,fun.clone(),Some(line_num.unwrap()+1),Default::default())); // unwrap known safe, could be unchecked
+				    		self.stack.push((want_return,scope_restore,fun.clone(),Some(line_num.unwrap()+1),Default::default())); // unwrap known safe, could be unchecked
 				    		None
 				    	};
 
@@ -283,9 +283,9 @@ impl Eval {
 					                    }
 					                    BuiltinReturn::Push(handles) => {
 					                    	if TRACE_DEBUG {
-	                							println!("[EVAL SPECIAL depth: {} returning: {returning}]", self.stack.len());
+	                							println!("[EVAL SPECIAL depth: {} returning: {returning} SR? {}]", self.stack.len(), scope_restore.is_some());
 					                    	}
-					                    	self.stack.push((returning,args_restore,None,None,handles));
+					                    	self.stack.push((returning,scope_restore,None,None,handles));
 					                    	return_on_continue = true;
 					                    	continue 'execute;
 					                    }
@@ -294,7 +294,8 @@ impl Eval {
 					            // User defined
 								Value::Array => {
 									// The only complicated part here is juggling the args variable
-									let old_args = if args_restore.is_none() {
+/*
+									let old_args = if scope_restore.is_none() {
 										// Normal case: Fetch the args variable out of memory
 										let old_args = self.memory.dict_get(self.memory.globals.clone(), args_str!());
 										old_args.unwrap_or_else(||self.memory.nil()) // Failing here should be impossible currently
@@ -309,9 +310,82 @@ impl Eval {
 
 									let args = self.memory.array_from_handles(cdr);
 									self.memory.dict_set(self.memory.globals.clone(), args_str!(), args);
+*/
+									if TRACE_DEBUG {
+										print!("[EVAL DESCEND B depth: {} carl: {} SR? {}", self.stack.len(), self.memory.array_len(car.clone()), scope_restore.is_some());
+									}
 
-									self.stack.push((returning,Some(old_args),Some(car.clone()),Some(0),Default::default()));
+									self.stack.push((returning,scope_restore.clone(),Some(car.clone()),Some(0),Default::default()));
 								},
+								Value::Fun => {
+									// Fiddle with old_args if it exists and we're replacing
+									// Then invoke
+									let call_fun = self.memory.fun_unpack(car.clone());
+
+									if TRACE_DEBUG {
+										print!("[EVAL DESCEND F depth: {} SR? {}", self.stack.len(), scope_restore.is_some());
+									}
+
+									let args_value = self.memory.value(call_fun.args.clone());
+									let locals_value = self.memory.value(call_fun.locals.clone());
+									let no_name = call_fun.name.is_none();
+									let no_args = matches!(args_value, Value::Primitive(Primitive::Nil));
+									let no_locals = matches!(locals_value, Value::Primitive(Primitive::Nil));
+									if !(no_name && no_args && no_locals) {
+										if TRACE_DEBUG { print!(" Swap: "); }
+										fn swap(memory: &mut Memory, scope_restore: MemHandle, key:Primitive, handle: MemHandle) {
+											let old_handle = memory.dict_get(memory.globals.clone(), key.clone());
+											let has = memory.dict_has(scope_restore.clone(), key.clone());
+											if TRACE_DEBUG {
+												print!("{}:{}{}, ", key.clone(), memory.value(handle.clone()), if has {"(skip)"} else {""});
+											}
+											memory.dict_set(memory.globals.clone(), key.clone(), handle);
+
+											if !has { // Older shadows newer for restore
+												if let Some(old_handle) = old_handle {
+													memory.dict_set(scope_restore, key, old_handle);
+												} else { // MemCell has a special value type JUST for this case
+													memory.dict_set_hole(scope_restore, key);
+												}
+											}
+										}
+
+										let scope_restore = scope_restore.clone().unwrap_or_else(|| self.memory.dict_new());
+
+										if !no_locals {
+											let locals_keys = self.memory.dict_keys(call_fun.locals.clone());
+											for key in locals_keys {
+												let value = self.memory.dict_get(call_fun.locals.clone(), key.clone()).unwrap();
+												swap(&mut self.memory, scope_restore.clone(), key, value);
+											}
+										}
+
+										if !no_args {
+											for idx in 0..self.memory.array_len(call_fun.args.clone()) {
+												let pair = self.memory.array_get(call_fun.args.clone(), idx).unwrap();
+												let name = self.memory.array_get(pair.clone(), 0).unwrap();
+												let Value::Primitive(key@Primitive::String(_)) = self.memory.value(name) else { panic!("Interpreter internal error"); };
+												let value = if cdr.len() > idx {
+													cdr[idx].clone()
+												} else {
+													self.memory.array_get(pair, 1).unwrap()
+												};
+												swap(&mut self.memory, scope_restore.clone(), key, value)
+											}
+										}
+
+										if let Some(name_str) = call_fun.name {
+											swap(&mut self.memory, scope_restore.clone(), Primitive::String(name_str), car.clone());
+										}
+
+										if TRACE_DEBUG {
+											println!("]");
+										}
+
+										// Invoke
+										self.stack.push((returning,Some(scope_restore),Some(call_fun.body),Some(0),Default::default()));
+									}
+								}
 								// That's it!
 								v @ _ => {
 				            		let fun = true_fun(&self.stack, fun);
@@ -322,13 +396,28 @@ impl Eval {
 
 				    	// End-of-function stack cleanup follows
 
+						if TRACE_DEBUG {
+							print!(" [ARGS ASCEND");
+						}
+
 				        // If we're returning and we realized above we need to juggle args, do that
-				        if let Some(args_restore) = args_restore {
+				        if let Some(scope_restore) = &scope_restore {
 				        	if TRACE_DEBUG {
-								println!(" [ARGS ASCEND RESTORE c {}] ", self.memory.array_len(args_restore.clone()));
+								print!(" RESTORE c {}", self.memory.dict_len(scope_restore.clone()));
 							}
-					        self.memory.dict_set(self.memory.globals.clone(), args_str!(), args_restore.clone());
+							let restore_keys = self.memory.dict_keys(scope_restore.clone());
+							for key in restore_keys {
+								let value = self.memory.dict_get(scope_restore.clone(), key.clone()).unwrap();
+
+								if self.memory.is_hole(value.clone()) {
+									self.memory.dict_del(scope_restore.clone(), key);
+								} else {
+									self.memory.dict_set(scope_restore.clone(), key, value);
+								}
+							}
 					    }
+
+					    if TRACE_DEBUG { println!("]"); }
 
 				        // Peek stack one level, append to prepare and loop
 				       	// (If appending to prepare ISN'T the right thing to do... something went VERY wrong above!)

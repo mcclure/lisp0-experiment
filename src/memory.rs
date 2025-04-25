@@ -57,6 +57,8 @@ pub enum Value {
 	Fun
 }
 
+// Note: In the language and docs these are called "fn"s,
+// But I call them "fun" pervasively in the Rust code because fn is a reserved word.
 #[derive(Clone)]
 pub struct Fun {
 	pub name:Option<String>,
@@ -77,7 +79,7 @@ impl fmt::Display for Value {
             Value::Quote => write!(f, "[quote]"),
             Value::Array => write!(f, "[array]"), // TODO: size would be nice.
             Value::Dict => write!(f, "[dict]"),
-            Value::Fun => write!(f, "[fun]"),
+            Value::Fun => write!(f, "[fn]"),
         }
     }
 }
@@ -92,6 +94,7 @@ enum MemCell {
 	Array(ReaderPosition, Vec<MemAddr>),
 	Dict(HashMap<Primitive, MemAddr>),
 	Fun { name:Option<String>, args: MemAddr, locals: MemAddr, body: MemAddr },
+	Hole,            // Used by scope only
 	Forward(MemAddr) // Used during GC only
 }
 
@@ -140,7 +143,8 @@ pub struct Memory {
 
 impl Memory {
 	pub fn new_sized(starting_size:usize) -> Self {
-		println!("MemCell size: {}", std::mem::size_of::<MemCell>());
+		//println!("MemCell size: {}", std::mem::size_of::<MemCell>()); // Note: When making changes to MemCell, uncomment and verify this is still 56
+
 		let mut space0:MemSpace = Vec::with_capacity(starting_size);;
 		space0.push(MemCell::Dict(Default::default()));
 		let mut handle_table = MemHandleTable::default();
@@ -210,7 +214,7 @@ impl Memory {
 				while let Some(mut cell) = todo.pop_front() {
 					// TODO: "Pop out" the value instead of pulling it from todo
 					match &mut cell { // Follow links
-				        MemCell::Primitive(_) => (),
+				        MemCell::Primitive(_) | MemCell::Hole => (),
 				        MemCell::Quote(addr) =>
 				        	*addr = forward_one(space_from, space_to, *addr, &mut todo, true),
 				        MemCell::Array(_, vec) => {
@@ -350,6 +354,7 @@ impl Memory {
 			MemCell::Array(_, _) => Value::Array,
 			MemCell::Dict(_) => Value::Dict,
 			MemCell::Fun{..} => Value::Fun,
+			MemCell::Hole => panic!("Interpreter bug detected"),
 			MemCell::Forward(_) => panic!("Memory corruption detected")
 		}
 	}
@@ -602,5 +607,20 @@ impl Memory {
 		let body = self.handle_new(body);
 
 		Fun { name, args, locals, body }
+	}
+
+	fn hole_new_alloc(&mut self) -> MemAddr {
+		self.alloc_internal(MemCell::Hole)
+	}
+
+	pub fn is_hole(&mut self, handle:MemHandle) -> bool {
+		matches!(self.cell(handle), MemCell::Hole)
+	}
+
+	pub fn dict_set_hole(&mut self, handle:MemHandle, key:Primitive) {
+		let addr2 = self.hole_new_alloc();
+		let cell = self.cell_mut(handle);
+		let MemCell::Dict(dict) = cell else { panic!("Expected dict") };
+		dict.insert(key, addr2);
 	}
 }

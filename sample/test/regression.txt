@@ -28,7 +28,7 @@ reader/fail/unbalance.l0
 basic/lisp/array.ls0
 basic/lisp/convert.ls0
 basic/lisp/dict.ls0
-basic/lisp/fun.ls0
+basic/lisp/fun-bare.ls0
 basic/lisp/get.ls0
 basic/lisp/lone.ls0
 basic/lisp/math.ls0
@@ -43,6 +43,7 @@ basic/lisp/fail/no-such-var.ls0
 
 basic/flow.l0
 basic/fun.l0
+basic/fun-bare.l0
 basic/higher.l0
 basic/inset.l0
 basic/lone.l0

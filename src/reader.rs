@@ -74,12 +74,11 @@ enum GroupKind { // What parenthesis closes this group?
 struct StackFrame {
 	node: AstNode,    // Building
 	group: GroupKind, // For parenthesis matching, line interpretation
-	group_solo: Option<usize>, // For l0, lines with a single item.
 }
 
 impl StackFrame {
 	fn new(node: AstNode, group: GroupKind) -> Self {
-		Self { node, group, group_solo: Default::default() }
+		Self { node, group }
 	}
 }
 
@@ -195,49 +194,26 @@ fn die() -> ! {
 // Can throw errors, because this is where we check the "Lone" rules.
 fn peel(stack: &mut Vec<StackFrame>, tag:&String, lisp:bool) -> Result<(), Error> {
 	loop {
-		let Some(StackFrame {node:mut top, group:top_group, group_solo:top_group_solo}) = stack.pop() else { die() };
+		let Some(StackFrame {node:mut top, group:top_group}) = stack.pop() else { die() };
 		fn solo(node:&AstNode) -> bool {
 			let AstContent::Group(v) = &node.content else { die() };
 			v.len() == 1
 		}
-		// If completing a group, check for solo rule violations.
-		if !lisp {
-			if let GroupKind::Curly(GroupLineState::Normal) | GroupKind::Curly(GroupLineState::Comma) = top_group {
-				if let Some(group_solo) = top_group_solo {
-					let AstContent::Group(top_v) = &top.content else { die() };
-					if group_solo != top_v.len()-1 {
-						return Err(Error {at:top_v[group_solo].at, tag:tag.clone(), message:format!("Single item in middle of `{{}}` group. To call a function, use `do`")});
-					}
-				}
-			}
-		}
-		let Some(StackFrame{node:into, group_solo:into_group_solo, ..}) = &mut stack.last_mut() else { die() };
+		let Some(StackFrame{node:into, ..}) = &mut stack.last_mut() else { die() };
 		match &mut into.content {
 			AstContent::Quote(bx) => {
 				**bx = top;
 			}
 			AstContent::Group(v) => {
-				// Before pushing, we must apply "solo rules" (unwrap literal values).
-				if !lisp {
-					match top_group {
-						GroupKind::File(GroupLineState::Line) => {
-							if solo(&top) {
-								return Err(Error {at:top.at, tag:tag.clone(), message:format!("Single item at file toplevel. To call a function, use `do`")});
-							}
-						},
-						GroupKind::Curly(GroupLineState::Line) | GroupKind::Square(GroupLineState::Line) => {
-							if solo(&top) {
-								let AstContent::Group(top_v) = &mut top.content else { die() };
-								top = top_v.pop().unwrap();
-								if matches!(top_group, GroupKind::Curly(_)) {
-									if into_group_solo.is_none() {
-										*into_group_solo = Some(v.len())
-									}
-								}
-							}
-						}
-						_ => {}
-					}
+				// "solo rules" for square brackets (unwrap single literal values).
+				// structural—- semantic solo rules for toplevel/curly in eval.rs
+				if !lisp
+				&& matches!(top_group, GroupKind::Square(GroupLineState::Line)
+					                 | GroupKind::Curly(GroupLineState::Line)
+					                 | GroupKind::File(GroupLineState::Line))
+				&& solo(&top) {
+					let AstContent::Group(top_v) = &mut top.content else { die() };
+					top = top_v.pop().unwrap();
 				}
 				v.push(top);
 				break;

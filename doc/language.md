@@ -1,59 +1,214 @@
-This language is unnamed, and unstable.
+This language is unnamed, and unstable. This document describes only this specific edition/variant of the language (see [README.md](../README.md) or invoke the interpreter with `-v`).
 
-# Parsing text
+The general idea is this is a LISP variant with "no special forms", and an optional "low-parentheses" sugar syntax. If you have used other programming languages, you may be able to get a sense of the language just from reading [an example](../sample/fizzbuzz.l0).
 
-Input files are UTF-8. A beginning BOM will be discarded.
+# Invocation
 
-A file is a series of statements. Statements are separated by newlines or commas. A newline is a CR, LF, or CRLF sequence.
+The `lisp0` command line executable has a `--help`, but in general:
 
-When inside of a comment: All input is discarded until the newline is reached.
+- Invoke with either the name of a file to execute, or `-e ''` with code in the quotes.
+- Arguments to the program should be given after `--`.
+- The language comes in two forms, a "pure LISP" form and a sugared form. If the invoked file has a `.ls0` file extension, or the `--lisp` argument is given at the command line, the "pure LISP" form will be enforced. Otherwise sugar is applied (the recommended file extension for this is `.l0`).
+- You can block executed programs from interacting with the filesystem by passing `--disable-fs`.
+- Currently, there are bugs in the garbage collector which can lead to crashes. A crash can be significantly delayed by increasing the size of the default memory, thus making GCs less frequent. To do this, initialize with `--debug-mem-initial=16777216` (or some other large number). Yes, this is bad.
+- Invoking with `-v` will print versions for the interpreter and language, then quit.
 
-When neither inside a comment or string, if a line ends with `\`, all whitespace and comments following that `\` leading up to the next non-whitespace character are treated as a single space (in other words, a `\` may consume multiple blank lines). Placing anything after a `\` other than whitespace or comments are an error.
+Currently the language is not configured for embedding.
 
-A statement is a series of symbols. A symbol is:
+# Basics
 
-	* An identifier, as described below.
-	* A number, as described below.
-	* Any number of `'` marks followed by a symbol.
-	* A string, as described below.
-	* A paired `()`, `{}` or `[]` delimiter containing zero or more statements.
+Read either "Basics— LISP" or "Basics— L0" below.
 
-An identifier is a sequence of characters not including `#`, `\` or any whitespace, quote, delimiter character; and which does not a legal number as a prefix.
+## Basics— LISP
 
-A string is:
-	* A `"` character, followed by a sequence of non-newline characters and ending with another ". Within a `"` string, a backslash followed by another character has special meaning:
-		* `\\t` - a tab
-		* `\\n` - a tab
-		* `\\\\` - a backslash
-		* `\"` - a quote (does not terminate string)
+Programs in this language are a series of statements. A statement is a parenthesis-enclosed, whitespace-separated "word list". A word is:
 
-	* A `\`` character, followed by a sequence of non-newline characters and ending with another `.
+- An identifier: Any sequence of characters not including `'"#(){}[],`. This is interpreted as the name of a "variable".
+- A number (an integer)
+- A string, which is either:
+    - Non-newline text between two `"` characters, with special behavior when a `\\` appears:
+    	- `\\\\` will be taken as a backslash.
+    	- `\\n` will be taken as a newline (LF).
+    	- `\\t` will be taken as a tab.
+    	- `\\"` will be taken as a quotation marks.
+    	- A `\\` at the end of a line (IE, whitespace followed by a newline) will be silently deleted
+    - Non-newline text between two `\`` characters. (And no special meaning for `\\`.)
+    - A `'` followed by a number of non-whitespace characters (as long as the first character is not a number¹.
+- A function call: This is a parenthesis-enclosed word list.
+- A quoted list: This is a `'` followed by a parenthesis-enclosed word list.
 
-## Unicode oddness
+Words are separated by any whitespace. A `\\` may be placed at the end of a line, and will be silently discarded.
 
-Except in the interior of strings or comments, and except when U+FEFF is the opening BOM:
+Placing a `#` anywhere will be treated as a "comment"; everything from the `#` to the next newline will be ignored. If a line within a comment ends with '\\', the comment will be extended until the next non-whitespace character. In regular code, a comment after after a `\\`is allowed.
 
-* U+00A0 NO-BREAK SPACE, U+1680 OGHAM SPACE MARK, U+200B ZERO WIDTH SPACE and U+FEFF ZERO WIDTH NO-BREAK SPACE are illegal.
-* U+201C LEFT DOUBLE QUOTATION MARK and U+201D RIGHT DOUBLE QUOTATION MARK are equivalent to `"` (that is, smart double quotes may open or close a `"` type string).
-* U+2018 LEFT SINGLE QUOTATION MARK and U+2019 RIGHT SINGLE QUOTATION MARK are equivalent to `'`.
-* U+00B4 ACUTE ACCENT is equivalent to `\`` (that is, it may open or close a `\`` type string).
-* Any Unicode character in category "Open Punctuation" or "Close Punctuation", unless it is explicitly mentioned earlier in this document, is an error. (These may be given semantics in a later version.)
+In advanced use: Function calls can be nested, quoted word lists can contain nested word lists, and quoted word lists can contain other quoted lists. The intent of a quoted word list is to "interpret code as data", but could also be used as a shorthand way of declaring data for your own use. When interpreting a quoted list as data, identifiers become strings, strings become "quoted" strings, word lists become regular lists, and quoted word lists remain quoted word lists.
 
-When comparing two Unicode strings, the strings are sorted by codepoint.
+Below, a quoted list itself containing word lists will be called a "block", and used to make functions; `'((set 'x y) (print x) x)` is equivalent to `{set 'x y, print x, x}` below. (Note the final "x" is *not* wrapped in parenthesis; this is the "return value".) Also below a `[]` sugar syntax will be used to define array literals; in LISP this is done by calling `make-array`. `[w, x y, z]` as written below would be `(make-array w (x y) z)` in the LISP syntax.
 
-# Semantics
+¹ Entering a \' followed by an integer will do something surprising, so don't do that.
 
-TODO
+## Basics— L0
 
-## Wait, TODO?
+Programs in this language are a series of statements; statements are lists of words. Statements are separated from each other by newlines or commas, and words within a statement are separated from each other by any whitespace. A word is:
 
-If you're really curious how to use this, I suggest examining the examples in [sample/](../sample) as well as the names of the functions defined in [src/globals.rs](../src/globals.rs).
+- An identifier: Any sequence of characters not including `'"#(){}[],`. This is interpreted as the name of a "variable".
+- A number (an integer)
+- A string, which is either:
+    - Non-newline text between two `"` characters, with special behavior when a `\\` appears:
+    	- `\\\\` will be taken as a backslash.
+    	- `\\n` will be taken as a newline (LF).
+    	- `\\t` will be taken as a tab.
+    	- `\\"` will be taken as a quotation marks.
+    	- A `\\` at the end of a line (IE, whitespace followed by a newline) will be silently deleted
+    - Non-newline text between two `\`` characters. (And no special meaning for `\\`.)
+    - A `'` followed by a number of non-whitespace characters (as long as the first character is not a number².
+- A function call: This is a parenthesis-enclosed word list.
+- A block: This is `{}` curly braces containing one or more statements.
+- An array: This is `[]` square brackets containing one or more statements.
+- A quoted list: This is a `'` followed by a parenthesis-enclosed word list.
 
-# Verification
+A statement may cross multiple lines by placing a `\\` at the end of a line; all whitespace after the `\\` will be treated as a single space. Newlines inside a function call or quoted list (as opposed to inside a block or array) will be treated as an error.
 
-The directory `sample/test` of this directory contains a sort of "verification test" suite of sample files. Each file is annotated with an expected output in the comments, as parsed by the (pending) script `tools/regression.py`. Scripts which are expected to fail are sorted in subdirectories named "fail". If this file ever differs from a script in this directory, that is to be considered a bug.
+Placing a `#` anywhere will be treated as a "comment"; everything from the `#` to the next newline will be ignored. If a line within a comment ends with '\\', the comment will be extended until the next non-whitespace character. In regular code, a comment after after a `\\`is allowed.
 
-Some of these files are commented with "tags":
+Function calls, blocks, arrays, and quoted word lists can be nested within each other freely.
 
-* unicode: This script assumes a unicode-capable parser.
-* ltt: This script accurately describes current behavior, but the behavior is specifically planned to change.
+Blocks are used to create functions. When a {} is executed as code, any line containing two or more words will be treated as a function call, but a single word by itself will be treated as a "return value" and its value will be returned without being executed³. Likewise, for a `[]` in code, statements with two or more words will be treated as function calls and their value will be stored in the array, whereas single-word statements will be treated as values and that lone value will be stored in the array. In either of these cases, if you want to execute a block/function with no arguments, use `do`.
+
+In advanced use: When interpreting a block or quoted list as data, identifiers become strings, strings become "quoted" strings, word lists become regular lists, and quoted word lists remain quoted word lists. Additionally, the block itself becomes a quoted list; for each statement in the block, the statement becomes (if the statement contains two or more words) a list containing its words or (if the statement contains one word) becomes just that lone word.
+
+² Entering a \' followed by an integer will do something surprising, so don't do that.
+³ Note this means that a lone word by itself in the middle of a block is nonsensical; when executing code, this will be treated as an error.
+
+### Why "L0"?
+
+I, the author of this language, don't much like LISP. The parenthesis everywhere bug me. L0 is a "sugar syntax" which tries to cut down on the parenthesis by using newlines as a shorthand for `) (`, curly braces as a shorthand for `'(( … ))`, and square braces as a shorthand for `(make-array)`.
+
+# Writing code
+
+Statements are treated as "function calls", where the first word is the item to be executed and the remaining words are "arguments". The two things that can be executed are blocks and functions. Functions are "upgraded" blocks which may have local variables and take arguments. (Arguments can be passed to a block, but the arguments will be discarded.) Before executing a statement, the arguments will first be evaluated. So for example:
+
+    print (+ 3 2) (- 1 2) ln
+
+When executing this statement, `+ 3 2` and `- 1 2` (that second one calculates `1 - 2`, if you've never used a LISP before) will be executed *before* `print` is invoked⁴.
+
+Full standard library documentation is below, but the most important basic builtin symbols are `print`, `sp`, `ln`, `set`, `fn`, `if`, `true` and `nil`. `print` will write⁶ each of its arguments to STDOUT as text; `sp` and `ln` are strings containing a space and a newline.
+
+`set` is used to assign a variable. For its first argument it takes the variable name to set *as a string*. For example:
+
+	set 'x 3
+	print x
+
+This will print "3" to STDOUT. Note writing `set x 3` would be accepted but probably not do what you want⁷.
+
+`true` and `nil` are used in boolean expressions (`nil` is used for "false"). `if` takes a condition and two blocks, and executes either the first block or the second depending on whether the condition executes to `nil` or non-`nil`:
+
+    if (> x 3) {
+    	print "x is high" ln
+	} {
+		print "x is low" ln
+	}
+
+For the comfort of anyone used to other programming languages, the identifier `else` may be placed between the two blocks, and will be silently ignored:
+
+	if (> x 3) {
+    	print "x is high" ln
+	} {
+		print "x is low" ln
+	}
+
+⁴ And consistently from left to right, if it matters.
+⁶ No particular guarantees are made about flushing behavior when printing, but you can force a flush by calling `do flush`.
+⁷ `set` is an ordinary function and will assign to whatever string it receives as its first argument. So for example if you run:
+
+	set 'x 'y
+	set x 'z
+	print y
+
+This will print the string "z", because the second line sets the variable whose name is stored in the variable x. If you find this confusing, then simply remember that the first argument to `set` should always begin with a `'`.
+
+TODO: Explain funs.
+
+## Data
+
+Data in this language can be a string, an integer, an array⁵, a dictionary, a quote, or the two special values `true` and `nil`⁸.
+
+⁵ Notice I say "array". Users of other LISPs may expect "lists" to be linked lists in a car-cdr structure. This LISP doesn't have those, and when I use "list" in this document, I mean it in the generic sense of a *sequence*.
+
+⁸ Note the `print` function only really expects strings and integers; any other kind of data will result in a square-bracketed debug print such as `[nil]` or `[array]`.
+
+### Arrays
+
+Arrays are created with `[]` (or manually, with `make-array`) You set their values using extended arguments for `set`, and can read them back using the function `get`:
+
+	set 'a [4]
+	print (get a 0) ln # Prints 4
+	set a 0 5          # Note no '
+	print (get a 0) ln # Prints 5
+
+Arrays are 0-indexed; they can be extended using `push`, truncated using `trunc`, and their length can be queried using `len`. Using `get` with an invalid numeric index returns `nil`; if you need to distinguish between an invalid index and a valid index containing `nil`, use `len` or the helper `has`.
+
+	set 'print-state {
+		print (get a 0) ", " (get a 1) "; " (len a) ", " (has a 1) ln
+	}
+    set 'a [4]
+    push 'a 5
+    do print-state
+    trunc 'a 1 # Truncate to length 1
+    do print-state
+
+The first `print-state` will print "4, 5; 2, [true]" and the second will print "4, [nil]; 1, [nil]".
+
+### Dicts
+
+Dicts are created with `make-dict`, which takes an even number of arguments and assigns the even arguments to keys and the odd arguments to 0. Similar to arrays, you can fetch and set keys with `get` and `set`. Also similar to arrays, fetching an absent key will return `nil`, but `has` can be used to test if a key is present. `del` can be used to remove a key from an array, and `len` will return its number of items. Keys to dictionary can be any of a string, an integer, or `true` or `nil`⁹.
+
+	set 'print-state {
+		print (get a 'x) ", " (get a 'y) ", " (get a 'z) "; " \
+		(len a) ", " (has a 'y) ln
+	}
+    set 'a (make-dict \
+    	'x 5
+    	'y 6
+    )
+    do print-state
+    set 'a 'z 7
+    del 'a 'y
+    do print-state
+
+The first `print-state` will print "4, 5, [nil]; 2, [true]" and the second will print "4, [nil], 6; 2, [true]".
+
+⁹ As I'm writing this document, it occurs to me that using builtin functions, such as `set` and `if`, as keys to a dictionary *probably* works. Let's say that's "undefined behavior".
+
+### Advanced use: Quotes
+
+"Quotes" have been glossed by a few times now in this document because they are largely an implementation detail of the language. However quotes *are* exposed to the user because of homoiconicity¹⁰, and they're potentially useful.
+
+The basic use of quotes would be to leverage the fact that quoted lists become lists of words. For example, you could say `(make-array "x", "y", "z", "w")`, but `'(x y z w)` is exactly equivalent to that and shorter. This is because when executing a statement, at the same time that identifiers are looked up, any `'`s in the code¹¹ will be stripped away.
+
+However, you can also manipulate quotes at runtime as data objects; in this sense a quote is like a "box" that any value can be placed into or taken out of. You can make a runtime quote with `make-quote` and extract its value with `unquote`. Moreover if the first argument to `set` is a quote, the second argument will replace the single value within the quote. This "box"-like functionality means quotes can be used like OCaml `ref`.
+
+    # If you do not understand this code, that is a sign
+    # That you probably do not need it.
+
+    set 'a (make-quote 0)
+    set 'incr (fn {self a} { set a (+ (unquote a) 1) })
+    set 'fetch (fn {self a} { print (unquote a) })
+    set 'a nil
+
+    # This is object-oriented programming. No, really
+    do fetch # Print "0"
+    do incr
+    do fetch # Print "1"
+    do incr
+    do incr
+    do fetch # Print "3"
+
+As I'm writing this document, I found a bug which will prevent the above code from working. See comment on "fun" in globals.rs.
+
+¹⁰ The lambda, of course, is a homosexual icon.
+¹¹ Well, the outermost layer anyway. You can quote a quote.
+
+# Library reference
+
+TODO, until then read [globals.rs](../src/globals.rs)

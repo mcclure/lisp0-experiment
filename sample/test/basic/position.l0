@@ -1,0 +1,23 @@
+# Test the dubious array position functions
+
+set-fn 'pos {a} {} {
+	set 'a (get-position a)
+	set a 0 (get-position-source (get a 0))
+	+ "[" (to-string (get a 0)) ": " (to-string (get a 1)) ", " (to-string (get a 2)) "]" 
+}
+
+# Expect: [sample/test/basic/position.l0: 10, 12]
+print (pos {}) ln
+
+# Expect: [sample/test/basic/position.l0: 13, 13]
+print (pos '()) ln
+
+set 'a (make-array-with-position [0, 37, 72] 3 4 5 6)
+
+# Expect: [<user-defined>: 37, 72]
+print (pos a) ln
+
+set 'a (make-array-with-position [] 3 4 5 6)
+
+# Expect: [sample/test/basic/position.l0: 20, 34]
+print (pos a) ln

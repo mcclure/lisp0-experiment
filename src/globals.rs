@@ -4,6 +4,7 @@ use clap::builder::OsStringValueParser;
 
 use crate::eval::{Error, Eval, BuiltinReturn};
 use crate::memory::{MemHandle, MemHandleImpl, Memory, Primitive, Value};
+use crate::reader::ReaderPosition;
 
 use std::fmt;
 use std::io::stdin;
@@ -591,7 +592,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 
 	insert(memory, "del", Primitive::Builtin(|eval, args| {
 		if args.len() != 2 {
-			return Err(Error {message:format!("`del` expects exactly one argument")});
+			return Err(Error {message:format!("`trunc` expects exactly one argument")});
 		}
 		match eval.memory.value(args[0].clone()) {
 			// TODO: Support lots of other things
@@ -611,7 +612,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 
 	insert(memory, "truncate", Primitive::Builtin(|eval, args| {
 		if args.len() != 2 {
-			return Err(Error {message:format!("`del` expects exactly one argument")});
+			return Err(Error {message:format!("`del` expects exactly 2 arguments")});
 		}
 		match eval.memory.value(args[0].clone()) {
 			Value::Array => {
@@ -1078,6 +1079,77 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 	}));
 
 	insert(memory, "else", Primitive::Nil);
+
+	// --- Line number management ---
+
+	insert(memory, "get-position", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:format!("`get-position` expects exactly one argument")});
+		}
+		match eval.memory.value(args[0].clone()) {
+			Value::Array => {
+				let position = eval.memory.array_get_position(args[0].clone());
+				let x = eval.memory.value_new(Value::Primitive(Primitive::Int(position.source as i64)));
+				let y = eval.memory.value_new(Value::Primitive(Primitive::Int(position.line as i64)));
+				let z = eval.memory.value_new(Value::Primitive(Primitive::Int(position.column as i64)));
+				Ok(BuiltinReturn::Value(eval.memory.array_from_handles(&[x, y, z])))
+			}
+			v @ _ => Err(Error {message:format!("`get-position` expects array, got: {:?}", v)}) // TODO: Display not Debug
+		}
+	}));
+
+	insert(memory, "get-position-source", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:format!("`get-position-source` expects exactly one argument")});
+		}
+		match eval.memory.value(args[0].clone()) {
+			Value::Primitive(Primitive::Int(i)) => {
+				if i >= 0 && (i as usize) < eval.source_tag.len() {
+					Ok(BuiltinReturn::Value(eval.memory.value_new(Value::Primitive(Primitive::String(
+						eval.source_tag[i as usize].clone()
+					)))))
+				} else {
+					Ok(BuiltinReturn::Value(eval.memory.nil()))
+				}
+			}
+			v @ _ => Err(Error {message:format!("`get-position-source` expects integer, got: {:?}", v)}) // TODO: Display not Debug
+		}
+	}));
+
+	insert(memory, "make-array-with-position", Primitive::Builtin(|eval, args| {
+		if args.len() < 1 {
+			return Err(Error {message:format!("`make-array-with-position` expects at least one argument")});
+		}
+		fn int_at(memory: &mut Memory, handle:&MemHandle, i:usize) -> Result<u32, Error> {
+			let handle = memory.array_get(handle.clone(), i).unwrap();
+			match memory.value(handle) {
+				Value::Primitive(Primitive::Int(i)) => Ok(i as u32),
+				v @ _ => Err(Error {message:format!("`make-array-with-position` argument 0: Array contains unexpected item {}", v)})
+			}
+		}
+		match eval.memory.value(args[0].clone()) {
+			Value::Array => {
+				let position = match eval.memory.array_len(args[0].clone()) {
+					0 => {
+						eval.memory.array_get_position(args[0].clone())
+					}
+					2 => {
+						ReaderPosition { source: int_at(&mut eval.memory, &args[0], 0)?, line: int_at(&mut eval.memory, &args[0], 1)?, column: 0 }
+					}
+					3 => {
+						ReaderPosition { source: int_at(&mut eval.memory, &args[0], 0)?, line: int_at(&mut eval.memory, &args[0], 1)?, column: int_at(&mut eval.memory, &args[0], 2)? }
+					}
+					i @ _ => {
+						return Err(Error {message:format!("`make-array-with-position` argument 0: Array has unexpected size {}", i)})
+					}
+				};
+				Ok(BuiltinReturn::Value(
+					eval.memory.array_from_handles_with(position, &args[1..])
+				))
+			}
+			v @ _ => Err(Error {message:format!("`make-array-with-position` expects array for first argument, got: {:?}", v)})
+		}
+	}));
 
 	// --- Oddballs ---
 

@@ -3,68 +3,33 @@
 # AppArg: sample/aoc/data/sample.txt
 # Expect: Steps: 45 Visited: 41
 
-set 'noop {return nil}
-
-# Usage: if conditional {case1} {case2}
-set 'if {
-	inset args '(_if_cond _if_true _if_false) # Mass-assign sugar
-	set '_if_pair [return noop, return _if_false]
-	set '_if_pair [
-		get _if_pair (to-int (to-bool _if_false))
-		return _if_true
-	]
-	(get _if_pair (to-int (to-bool _if_cond))) # Extra () means execute
+# Usage while {conditional} {case}
+set-fn 'while {_while_cond, _while_body} {} {
+	if (do _while_cond) {
+		do _while_body
+		while _while_cond _while_body
+	}
 }
-
-# Usage if {conditional} {case}
-set 'while {
-	inset args '(_while_cond _while_true)
-	set '_while_pair [return noop]
-	push _while_pair [ # Construct fn as data so we don't have to think about
-		return [make-quote _while_true] # ..variable shadowing when recursing
-		return [return 'while, make-quote _while_cond, make-quote _while_true]
-	]
-	(get _while_pair (to-int (to-bool (_while_cond))))
-}
-
-set '<0 { != 0 (& -9223372036854775808 (get args 0)) }
-set '< {
-	<0 (- (get args 0) (get args 1))
-}
-set '>= { ! (< (get args 0) (get args 1)) }
-set '<= { # No, these variable names aren't great
-	inset args '(_<=_x  _<=_y)
-	|| (=  _<=_x  _<=_y) (<  _<=_x  _<=_y)
-}
-set '> { ! (<= (get args 0) (get args 1)) }
 
 # Helpers -- flow control -- 2
 
 # Usage for 'varname from to {case} step
-set 'for {
-	inset args '(_for_var  _for_from  _for_to  _for_case  _for_step)
+set-fn 'for '(_for_var  _for_from  _for_to  _for_case  _for_step) {_for_scope} {
 	if (! _for_step) {
 		set '_for_step \
-			(if (<  _for_from  _for_to) {return 1} {return -1})
+			(if (<  _for_from  _for_to) {1} {-1})
 	}
 
-	set _for_var _for_from
+	set '_for_scope (make-dict) # To inject
+	set _for_scope _for_var _for_from
 
-	# Construct to inline vars
-	[return [
-		return 'while
-		make-quote [return [return !=, return _for_var, return _for_to]]
-		make-quote [
-	        return [make-quote _for_case]
-	        return [return set, make-quote _for_var, return [
-				return '+, return _for_var, return _for_step
-			]]
-		]
-	]]
+	while {!=  (get  _for_scope  _for_var)  _for_to} {
+		do  _for_scope  _for_case # Injects var
+		set  _for_scope  _for_var  (+ (get  _for_scope  _for_var) _for_step)
+	}
 }
 
-set 'match {
-	inset args '(_match_key _match_table _match_default)
+set-fn 'match '(_match_key _match_table _match_default) '(_match_at _match_to _match_result _match_line) {
 	set '_match_at 0
 	set '_match_to (len _match_table)
 	set '_match_result nil
@@ -81,44 +46,37 @@ set 'match {
 		}
 	}
 
-	set '_match_table nil # Clear these, they might be large...
-	set '_match_line nil
-
 	if _match_result {
-		_match_result
+		do _match_result
 	} {
 		if _match_default {
-			_match_default
+			do _match_default
 		}
 	}
 }
 
 # Vectors
 
-set 'v { return [get args 0, get args 1] }
+set-fn 'v '(x y) '() { [x, y] }
 
-set 'v+ {
-	inset args '(_v_1 _v_2)
+set-fn 'v+ '(a b) '() {
 	v \
-		(+ (get _v_1 0) (get _v_2 0)) \
-		(+ (get _v_1 1) (get _v_2 1))
+		(+ (get a 0) (get b 0)) \
+		(+ (get a 1) (get b 1))
 }
 
-set 'vneg {
-	inset args '(_v_1)
-	v (neg (get _v_1 0)) (neg (get _v_2 0))
+set-fn 'vneg '(v) '() {
+	v (neg (get v 0)) (neg (get v 0))
 }
 
-set 'v= {
-	inset args '(_v_1 _v_2)
+set-fn 'v= '(a b) '() {
 	&& \
-		(= (get _v_1 0) (get _v_2 0)) \
-		(= (get _v_1 1) (get _v_2 1))
+		(= (get a 0) (get b 0)) \
+		(= (get a 1) (get b 1))
 }
 
-set 'vstr {
-	inset args '(_v_1)
-	+ "[" (get _v_1 0) ", " (get _v_1 1) "]"
+set-fn 'vstr '(v) '() {
+	+ "[" (get v 0) ", " (get v 1) "]"
 }
 
 # Program
@@ -173,7 +131,7 @@ file-in arg-file
 
 while {
 	set 'line (read-line)
-	return line
+	line
 } {
 	set 'line-len (len line)
 
@@ -186,8 +144,7 @@ while {
 			}
 		}
 
-		set 'guard-found {
-			inset args '(tmp-dir)
+		set-fn 'guard-found '(tmp-dir) '() {
 			if g-dir {
 				fail "Multiple guards"
 			} {
@@ -202,32 +159,27 @@ while {
 			set 'char (get line x)
 
 			set 'tile (match char [
-				return [return ".", return {
-					return FREE
-				}]
+				[".", {FREE}]
+				["#", {WALL}]
 
-				return [return "#", return {
-					return WALL
-				}]
-
-				return [return ">", return {
+				[">", {
 					guard-found RIGHT
-					return FREE
+					FREE
 				}]
 
-				return [return "v", return {
+				["v", {
 					guard-found DOWN
-					return FREE
+					FREE
 				}]
 
-				return [return "<", return {
+				["<", {
 					guard-found LEFT
-					return FREE
+					FREE
 				}]
 
-				return [return "^", return {
+				["^", {
 					guard-found UP
-					return FREE
+					FREE
 				}]
 			] {
 				fail "Unrecognized character " char
@@ -241,12 +193,16 @@ while {
 
 file-in nil
 
+if (! g-at) {
+	fail "Guard not found in file"
+}
+
 if arg-debug {
 	print "Board: " x-len " x " (len board) ln
 	print "Guard: " (get CHARS g-dir) sp (vstr g-at) ln
 }
 
-set 'board-print {
+set-fn 'board-print {
 	for 'y 0 (len board) {
 		for 'x 0 x-len {
 			if (v= g-at (v x y)) {
@@ -260,18 +216,16 @@ set 'board-print {
 	}
 }
 
-set 'board-in {
-	inset args '(_b_in)
+set-fn 'board-in '(v) '() {
 	&& \
-		(<= 0 (get _b_in 0))           \
-		(<= 0 (get _b_in 1))           \
-		(>  x-len       (get _b_in 0)) \
-		(>  (len board) (get _b_in 1))
+		(<= 0 (get v 0))           \
+		(<= 0 (get v 1))           \
+		(>  x-len       (get v 0)) \
+		(>  (len board) (get v 1))
 }
 
-set 'board-get {
-	inset args '(_b_in)
-	get (get board (get _b_in 1)) (get _b_in 0)
+set-fn 'board-get '(b) '() {
+	get (get board (get b 1)) (get b 0)
 }
 
 set 'searching (board-in g-at)

@@ -1,4 +1,5 @@
 # Test lone mid-item safeguard
+# Expect: 7
 # Expect failure
 
 set 'fn {

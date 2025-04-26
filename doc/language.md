@@ -86,7 +86,7 @@ I, the author of this language, don't much like LISP. The parenthesis everywhere
 
 # Writing code
 
-Statements are treated as "function calls", where the first word is the item to be executed and the remaining words are "arguments". The two things that can be executed are blocks and functions. Functions are "upgraded" blocks which may have local variables and take arguments. (Arguments can be passed to a block, but the arguments will be discarded.) Before executing a statement, the arguments will first be evaluated. So for example:
+Statements are treated as "function calls", where the first word is the item to be executed and the remaining words are "arguments". The two things that can be executed are blocks and functions¹². Functions are "upgraded" blocks which may have local variables and take arguments. (Arguments can be passed to a block, but the arguments will be discarded.) Before executing a statement, the arguments will first be evaluated. So for example:
 
     print (+ 3 2) (- 1 2) ln
 
@@ -126,12 +126,77 @@ For the comfort of anyone used to other programming languages, the identifier `e
 	print y
 
 This will print the string "z", because the second line sets the variable whose name is stored in the variable x. If you find this confusing, then simply remember that the first argument to `set` should always begin with a `'`.
+¹² And builtins. But let's *pretend* those are functions. As far as you know, they're functions.
 
-TODO: Explain funs.
+## Functions
+
+As shown above, "blocks" are created with `{ curly braces }`. They are similar to functions from other languages, in that they can be executed and can have return values. But they don't have scopes, and they can't take arguments.
+
+We can get these niceties by "upgrading" the block to a function with `fn`. `fn` takes up to four arguments; in its basic form it looks like
+
+	fn 'multiply-10-add {arg1 0, arg2 5} {local1 10} {
+		set 'local1 (* local1 arg1)
+		set 'local1 (+ local1 arg2)
+		local1
+	}
+
+Some things to note here. The `fn` form creates an anonymous function, so this code wouldn't do anything unless the fn was captured and passed to something else, such as `set`; the name given is only visible in `multiply-10-add`'s scope, and is there so the function can call itself recursively. The args and locals¹³ each have values after them; these are initial values, and are optional. The arg initial value is a default inserted if that argument is not provided. Excess arguments are silently ignored.
+
+`fn` comes in many forms, which you can find documented in the library reference below; primarily. Notably there are two variants of `fn`, named `set-fn` and `do`. `do` takes the same arguments as `fn` and effectively constructs a function and executes it immediately. `set-fn` calls `set` but also forwards the name argument to the fn. So a more useful version of the anonymous fn above could have been
+
+	set-fn 'multiply-10-add {arg1 0, arg2 5} {local1 10} {
+		set 'local1 (* local1 arg1)
+		set 'local1 (+ local1 arg2)
+		local1
+	})
+
+	print (multiply-10-add 5 10) # Prints 60
+
+Functions and blocks are both tail-recursive; a safe way to make an infinite loop would be
+
+	set 'x 0
+	do 'recurse {
+		print x ln
+		recurse (+ x 1)
+	}
+
+**A warning:** Scopes currently do not work the way you would expect from other languages. There is exactly one global, dynamic scope; the "scopes" created by functions only shuffle new values into the scope, and remove them at the end. (This is not an intentional design decision of the language, but is due to the simplicity of the current interpreter.) If this behavior is not planned for, it can lead to surprising and unwanted behavior:
+
+	set-fn 'fun1 {f} {x 2} {
+		do f
+	}
+
+	set-fn 'fun2 {v} {x 3} {
+		print "x: " x ln     # prints 3
+		fun1 {
+			print "x: " x ln # prints 2 ??
+		}
+		print "x: " x ln     # prints 3
+	}
+
+	fun2 "idk"
+
+The local x has "leaked" . Blocks are not closures. If closure-like behavior is needed, the best way to do this is to "manually capture" a variable using a local:
+
+	set-fn 'fun1 {f} {x 2} {
+		do f
+	}
+
+	set-fn 'fun2 {v} {x 3} {
+		print "x: " x ln     # prints 3
+		fun1 (fn {x x} {     # The parent "x" is embedded in the inner function.
+			print "x: " x ln # prints 3
+		})
+		print "x: " x ln     # prints 3
+	}
+
+	fun2 "idk"
+
+¹³ By the way, the args and locals arguments here are using the `{}` syntax, but they aren't blocks; the `fn` builtin interprets the contents as data rather than executing them. Initial values for args and locals *are* executed as code however, at the time `fn` is called.
 
 ## Data
 
-Data in this language can be a string, an integer, an array⁵, a dictionary, a quote, or the two special values `true` and `nil`⁸.
+Data in this language can be a string, an integer, an array⁵, a dictionary, a quote, a function, or the two special values `true` and `nil`⁸.
 
 ⁵ Notice I say "array". Users of other LISPs may expect "lists" to be linked lists in a car-cdr structure. This LISP doesn't have those, and when I use "list" in this document, I mean it in the generic sense of a *sequence*.
 

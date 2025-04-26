@@ -291,26 +291,8 @@ impl Eval {
 					                    }
 					                }
 					            },
-					            // User defined
+					            // User defined -- scopeless
 								Value::Array => {
-									// The only complicated part here is juggling the args variable
-/*
-									let old_args = if scope_restore.is_none() {
-										// Normal case: Fetch the args variable out of memory
-										let old_args = self.memory.dict_get(self.memory.globals.clone(), args_str!());
-										old_args.unwrap_or_else(||self.memory.nil()) // Failing here should be impossible currently
-									} else {
-										// Tail recursion case: yoink the args var *this* stackframe was supposed to return
-										std::mem::take(&mut args_restore).unwrap()
-									};
-
-									if TRACE_DEBUG {
-										println!("[EVAL DESCEND depth: {} carl: {}]", self.stack.len(), self.memory.array_len(car.clone()));
-									}
-
-									let args = self.memory.array_from_handles(cdr);
-									self.memory.dict_set(self.memory.globals.clone(), args_str!(), args);
-*/
 									if TRACE_DEBUG {
 										print!("[EVAL DESCEND B depth: {} carl: {} SR? {}]", self.stack.len(), self.memory.array_len(car.clone()), scope_restore.is_some());
 									}
@@ -319,6 +301,7 @@ impl Eval {
 
 									self.stack.push((returning,scope_restore,Some(car.clone()),Some(0),Default::default()));
 								},
+								// User defined -- scopes/arguments option
 								Value::Fun => {
 									// Fiddle with old_args if it exists and we're replacing
 									// Then invoke

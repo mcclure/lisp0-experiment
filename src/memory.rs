@@ -432,12 +432,12 @@ impl Memory {
 		self.handle_new(addr)
 	}
 
-	pub fn array_new_with(&mut self, position:ReaderPosition) -> MemHandle {
+	pub fn array_new_at(&mut self, position:ReaderPosition) -> MemHandle {
 		let addr = self.alloc_internal(MemCell::Array(position, Default::default()));
 		self.handle_new(addr)
 	}
 
-	pub fn array_from_handles_with(&mut self, position:ReaderPosition, handles: &[MemHandle]) -> MemHandle {
+	pub fn array_from_handles_at(&mut self, position:ReaderPosition, handles: &[MemHandle]) -> MemHandle {
 		let addr = self.alloc_internal(MemCell::Primitive(Primitive::Nil)); // Is this suboptimal?
 		let cell2 = MemCell::Array(position, handles.iter().map(|handle|self.handle_to_addr(handle.clone())).collect());
 		let cell = &mut self.space_mut()[addr];
@@ -446,7 +446,7 @@ impl Memory {
 	}
 
 	pub fn array_from_handles(&mut self, handles: &[MemHandle]) -> MemHandle {
-		self.array_from_handles_with(Default::default(), handles)
+		self.array_from_handles_at(Default::default(), handles)
 	}
 
 	// Clone array or crash

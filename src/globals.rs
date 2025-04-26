@@ -1116,15 +1116,15 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		}
 	}));
 
-	insert(memory, "make-array-with-position", Primitive::Builtin(|eval, args| {
+	insert(memory, "make-array-at", Primitive::Builtin(|eval, args| {
 		if args.len() < 1 {
-			return Err(Error {message:format!("`make-array-with-position` expects at least one argument")});
+			return Err(Error {message:format!("`make-array-at` expects at least one argument")});
 		}
 		fn int_at(memory: &mut Memory, handle:&MemHandle, i:usize) -> Result<u32, Error> {
 			let handle = memory.array_get(handle.clone(), i).unwrap();
 			match memory.value(handle) {
 				Value::Primitive(Primitive::Int(i)) => Ok(i as u32),
-				v @ _ => Err(Error {message:format!("`make-array-with-position` argument 0: Array contains unexpected item {}", v)})
+				v @ _ => Err(Error {message:format!("`make-array-at` argument 0: Array contains unexpected item {}", v)})
 			}
 		}
 		match eval.memory.value(args[0].clone()) {
@@ -1140,14 +1140,14 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 						ReaderPosition { source: int_at(&mut eval.memory, &args[0], 0)?, line: int_at(&mut eval.memory, &args[0], 1)?, column: int_at(&mut eval.memory, &args[0], 2)? }
 					}
 					i @ _ => {
-						return Err(Error {message:format!("`make-array-with-position` argument 0: Array has unexpected size {}", i)})
+						return Err(Error {message:format!("`make-array-at` argument 0: Array has unexpected size {}", i)})
 					}
 				};
 				Ok(BuiltinReturn::Value(
-					eval.memory.array_from_handles_with(position, &args[1..])
+					eval.memory.array_from_handles_at(position, &args[1..])
 				))
 			}
-			v @ _ => Err(Error {message:format!("`make-array-with-position` expects array for first argument, got: {:?}", v)})
+			v @ _ => Err(Error {message:format!("`make-array-at` expects array for first argument, got: {:?}", v)})
 		}
 	}));
 

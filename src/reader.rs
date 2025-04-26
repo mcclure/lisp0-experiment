@@ -424,7 +424,8 @@ pub fn ast<T: std::io::Read>(mut chars: char_reader::CharReader<T>, tag:String, 
 			    				}
 			    				stack.push(StackFrame::new(
 			    					AstNode {at, content:AstContent::Group(vec![
-			    						AstNode {at, content:AstContent::String("make-array".to_string())},
+			    						AstNode {at, content:AstContent::String("make-array-at".to_string())},
+			    						AstNode {at, content:AstContent::Quote(Box::new(AstNode {at, content:AstContent::Group(Default::default())}))}
 			    					])},
 			    					GroupKind::Square(GroupLineState::Normal)
 			    				));

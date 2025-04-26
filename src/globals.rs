@@ -866,21 +866,37 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 				Value::Primitive(Primitive::Nil) => args.clone(),
 				Value::Array =>	{
 					let filtered = eval.memory.array_new();
-					for idx in 0..eval.memory.array_len(args.clone()) {
+					let argsn = eval.memory.array_len(args.clone());
+					for idx in 0..argsn {
+						let is_final = ||idx+1>=argsn;
 						let item = eval.memory.array_get(args.clone(), idx).unwrap();
 						let bad = |eval:&Eval, item| Err(Error {message:format!("`{name}` \"args\" list, item {idx} unrecognized: {:?}", eval.memory.value(item))});
 						match eval.memory.value(item.clone()) {
-							Value::Primitive(Primitive::String(_)) => {
+							Value::Primitive(Primitive::String(s)) => {
 								let nil = eval.memory.nil();
-								let sub_item = eval.memory.array_from_handles(&[item.clone(), nil]);
+								let sub_item = if s.starts_with('&') {
+									if is_final() {
+										let s = if s.len() == 1 { "args" } else { &s[1..] };
+										eval.memory.value_new(Value::Primitive(Primitive::String(s.to_string())))
+									} else {
+										return Err(Error {message:format!("`{name}` \"args\" list, item {idx}, & argument cannot have an inital value")})
+									}
+								} else {
+									eval.memory.array_from_handles(&[item.clone(), nil])
+								};
 								eval.memory.array_push(filtered.clone(), sub_item);
 							}
 							Value::Array => {
 								let itemn = eval.memory.array_len(item.clone());
 								if 2 != itemn { return Err(Error {message:format!("`{name}` \"args\" list, item {idx} is not a pair (len {itemn})")}) }
 								let sub_item = eval.memory.array_get(item.clone(), 0).unwrap();
-								if !matches!(eval.memory.value(sub_item.clone()), Value::Primitive(Primitive::String(_))) {
-									return bad(&eval, item.clone());
+								match eval.memory.value(sub_item.clone()) {
+									Value::Primitive(Primitive::String(s)) => {
+										if s.starts_with('&') {
+											return Err(Error {message:format!("`{name}` \"args\" list, item {idx}, & argument cannot have an inital value")})
+										}
+									}
+									_ => return bad(&eval, item.clone())
 								}
 								let pair = eval.memory.array_new();
 								eval.memory.array_push(pair.clone(), sub_item);

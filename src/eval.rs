@@ -354,16 +354,34 @@ impl Eval {
 										}
 
 										if !no_args {
+											let mut rest: Option<(usize, Primitive)> = None;
 											for idx in 0..self.memory.array_len(call_fun.args.clone()) {
 												let pair = self.memory.array_get(call_fun.args.clone(), idx).unwrap();
-												let name = self.memory.array_get(pair.clone(), 0).unwrap();
-												let Value::Primitive(key@Primitive::String(_)) = self.memory.value(name) else { panic!("Interpreter internal error"); };
-												let value = if cdr.len() > idx {
-													cdr[idx].clone()
-												} else {
-													self.memory.array_get(pair, 1).unwrap()
-												};
-												swap(&mut self.memory, scope_restore.clone(), key, value)
+												match self.memory.value(pair.clone()) {
+													Value::Primitive(key@Primitive::String(_)) => {
+														rest = Some((idx, key.clone()));
+														break;
+													}
+													Value::Array => {
+														let name = self.memory.array_get(pair.clone(), 0).unwrap();
+														let Value::Primitive(key@Primitive::String(_)) = self.memory.value(name) else { panic!("Interpreter internal error"); };
+														let value = if cdr.len() > idx {
+															cdr[idx].clone()
+														} else {
+															self.memory.array_get(pair, 1).unwrap()
+														};
+														swap(&mut self.memory, scope_restore.clone(), key, value)
+													}
+													_ => panic!("Interpreter internal error")
+												}
+											}
+											if let Some((from_idx, key)) = rest {
+												let args = self.memory.array_new();
+												for idx in from_idx..cdr.len() {
+													let value = cdr[idx].clone();
+													self.memory.array_push(args.clone(), value);
+												}
+												swap(&mut self.memory, scope_restore.clone(), key, args);
 											}
 										}
 

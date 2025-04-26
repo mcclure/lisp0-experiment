@@ -652,6 +652,19 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 		Ok(BuiltinReturn::Value(handle))
 	}));
 
+	insert(memory, "clone", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:format!("`clone` expects exactly 1 argument")});
+		}
+		Ok(BuiltinReturn::Value(match eval.memory.value(args[0].clone()) {
+			// FIXME: If it ever becomes possible to modify a Fun this will be inadequate
+			Value::Primitive(_) | Value::Fun => args[0].clone(),
+			Value::Quote => eval.memory.quote_clone(args[0].clone()),
+			Value::Array => eval.memory.array_clone(args[0].clone()),
+			Value::Dict => eval.memory.dict_clone(args[0].clone()),
+		}))
+	}));
+
 	// --- inset/outset ---
 
 	insert(memory, "inset", Primitive::Builtin(|eval, args| {

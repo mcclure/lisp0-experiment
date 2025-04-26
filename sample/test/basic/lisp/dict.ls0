@@ -3,6 +3,7 @@
 # Expect: [nil] d [nil] f
 # Expect: 2 [nil] d [nil] g
 # Expect: 1 [nil] d [nil] [nil]
+# Expect: 2 X [nil] g
 
 (set 'a (make-dict))
 (set 'b (make-dict 'c 'd 'e 'f))
@@ -14,6 +15,11 @@
 
 (print (len b) sp (get a 'c) sp (get b 'c) sp (get b 'd) sp (get b 'e) ln)
 
+(set 'b2 (clone b))
+(set b2 'c 'X)
+
 (del b 'e)
 
 (print (len b) sp (get a 'c) sp (get b 'c) sp (get b 'd) sp (get b 'e) ln)
+
+(print (len b2) sp (get b2 'c) sp (get b2 'd) sp (get b2 'e) ln)

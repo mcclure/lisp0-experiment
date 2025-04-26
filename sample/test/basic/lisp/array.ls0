@@ -4,6 +4,7 @@
 # Expect: 5 g h [true] [nil]
 # Expect: 5 i h [true] [nil]
 # Expect: 4 i [nil] [true] [nil]
+# Expect: 5 A h [true] [nil]
 
 (set 'a (make-array))
 (set 'b (make-array 'c 'd 'e))
@@ -22,6 +23,13 @@
 
 # (print (has b -1) ln) # This worked (returned nil) at one point; maybe it will again in future.
 
+(set 'b2 (clone b))
+(set b2 3 'A)
+
 (truncate b 4)
 
 (print (len b) sp (get b 3) sp (get b 4) sp (has b 3) sp (has b 4) ln)
+
+# Clone test
+(print (len b2) sp (get b2 3) sp (get b2 4) sp (has b2 4) sp (has b2 5) ln)
+

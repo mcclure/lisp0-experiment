@@ -2,7 +2,7 @@
 # Expect: [true] [true] [true]
 # Expect: [nil] [nil] [nil] [quote]
 # Expect: [true] 3 3 [true] [true]
-# Expect: [nil] [true] 3 4
+# Expect: [nil] [true] 3 4 3
 
 (set 'a ''()) # Quote of list
 (set 'b (make-quote 3)) # Quote of int
@@ -15,6 +15,8 @@
 
 (print (is-array (unquote a)) sp d sp (unquote b) sp (is-int (unquote b)) sp (is-array (unquote (unquote c))) ln)
 
+(set 'b2 (clone b))
+
 (set b 4)
 
-(print (is-int b) sp (is-int (unquote b)) sp d sp (unquote b) ln)
+(print (is-int b) sp (is-int (unquote b)) sp d sp (unquote b) sp (unquote b2) ln)

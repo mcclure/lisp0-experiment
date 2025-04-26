@@ -126,7 +126,7 @@ For the comfort of anyone used to other programming languages, the identifier `e
 	print y
 
 This will print the string "z", because the second line sets the variable whose name is stored in the variable x. If you find this confusing, then simply remember that the first argument to `set` should always begin with a `'`.
-¹² And builtins. But let's *pretend* those are functions. As far as you know, they're functions.
+¹² And builtins, but those act like functions in every way except they aren't accepted by `fn-unpack`.
 
 ## Functions
 
@@ -192,7 +192,7 @@ The local x has "leaked" . Blocks are not closures. If closure-like behavior is 
 
 	fun2 "idk"
 
-¹³ By the way, the args and locals arguments here are using the `{}` syntax, but they aren't blocks; the `fn` builtin interprets the contents as data rather than executing them. Initial values for args and locals *are* executed as code however, at the time `fn` is called.
+¹³ Note the args and locals of the fn here use the `{}` syntax, but these `{}`s aren't blocks; the `fn` builtin interprets the contents as lists of symbols rather than executing them. Initial values for args and locals *are* executed as code however, at the time `fn` is called.
 
 ## Data
 

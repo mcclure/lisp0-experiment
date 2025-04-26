@@ -139,7 +139,12 @@ impl Eval {
 						}
 						self.memory.array_get(line.clone(), prepare.len()).expect("Interpreter internal error") // We checked the length already
 					} else {
-						line.clone() // None len is an indication line was not an array.
+						if is_final() {
+							line.clone() // None len is an indication line was not an array.
+						} else {
+							// "solo rules", runtime part (see also reader.rs)
+							return Err(Error {message:eformat!(fun, "Found lone-item statement (index {}) in middle of function (this syntax is for returns, so probably a mistake): {:?}", line_num.unwrap_or_else(||404), self.memory.value(line.clone()))}) // TODO display
+						}
 					};
 
 					// Inspect this word

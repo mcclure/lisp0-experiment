@@ -3,13 +3,12 @@
 # AppArg: 20
 # Expect: 1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 Fizzbuzz 16 17 Fizz 19 Buzz
 
-# Usage if {conditional} {case}
-set 'while {
-	inset args '(_while_cond _while_body)
-	if (_while_cond) [ # Arrays because we are "precompiling" a function
-		[make-quote _while_body]
-		[make-quote while, make-quote _while_cond, make-quote _while_body]
-	]
+# Usage while {conditional} {case}
+set-fn 'while {_while_cond, _while_body} {} {
+	if (do _while_cond) {
+		do _while_body
+		while _while_cond _while_body
+	}
 }
 
 # Fizzbuzz up to command line argument [default 10 if absent]
@@ -22,7 +21,7 @@ if target {
 	set 'target 10              # No ARGV
 }
 
-set '=0 { = 0 (get args 0) }
+set-fn '=0 {x} {} { = 0 x }
 
 while {< at target} {
 	set 'at (+ at 1)

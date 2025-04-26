@@ -37,6 +37,8 @@ Programs in this language are a series of statements. A statement is a parenthes
 - A function call: This is a parenthesis-enclosed word list.
 - A quoted list: This is a `'` followed by a parenthesis-enclosed word list.
 
+A statement with no parenthesis around it will be treated as a "return value". This should come only as the final line of a block.
+
 Words are separated by any whitespace. A `\\` may be placed at the end of a line, and will be silently discarded.
 
 Placing a `#` anywhere will be treated as a "comment"; everything from the `#` to the next newline will be ignored. If a line within a comment ends with '\\', the comment will be extended until the next non-whitespace character. In regular code, a comment after after a `\\`is allowed.
@@ -67,6 +69,8 @@ Programs in this language are a series of statements; statements are lists of wo
 - An array: This is `[]` square brackets containing one or more statements.
 - A quoted list: This is a `'` followed by a parenthesis-enclosed word list.
 
+A statement with only one word in it will be treated as a "return value". The "lone" value in this statement will not be executed as a function, but directly evaluates to its value. "Lone" values should only be used in arrays, or as the final line of a block (as otherwise they would be noops¹⁴).
+
 A statement may cross multiple lines by placing a `\\` at the end of a line; all whitespace after the `\\` will be treated as a single space. Newlines inside a function call or quoted list (as opposed to inside a block or array) will be treated as an error.
 
 Placing a `#` anywhere will be treated as a "comment"; everything from the `#` to the next newline will be ignored. If a line within a comment ends with '\\', the comment will be extended until the next non-whitespace character. In regular code, a comment after after a `\\`is allowed.
@@ -79,6 +83,7 @@ In advanced use: When interpreting a block or quoted list as data, identifiers b
 
 ² Entering a \' followed by an integer will do something surprising, so don't do that.
 ³ Note this means that a lone word by itself in the middle of a block is nonsensical; when executing code, this will be treated as an error.
+¹⁴ If you *want* a noop statement use `do discard`.
 
 ### Why "L0"?
 

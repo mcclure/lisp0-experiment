@@ -21,3 +21,15 @@ set 'a (make-array-at [] 3 4 5 6)
 
 # Expect: [sample/test/basic/position.l0: 20, 23]
 print (pos a) ln
+
+# Test unpack-fn here because it's in the same fuzzy "exposed internals" bucket
+
+# Expect: pos 1 0 3
+set 'pos-unpack (fn-unpack pos)
+print (get pos-unpack 0) sp (len (get pos-unpack 1)) sp \
+      (len (get pos-unpack 2)) sp (len (get pos-unpack 3)) ln
+
+# Expect: [nil] [nil] [nil] 0
+set 'pos-unpack (fn-unpack (fn {}))
+print (get pos-unpack 0) sp (get pos-unpack 1) sp \
+      (get pos-unpack 2) sp (len (get pos-unpack 3)) ln

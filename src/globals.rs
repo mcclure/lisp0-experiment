@@ -1080,7 +1080,7 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 
 	insert(memory, "else", Primitive::Nil);
 
-	// --- Line number management ---
+	// --- Exposed internals ---
 
 	insert(memory, "get-position", Primitive::Builtin(|eval, args| {
 		if args.len() != 1 {
@@ -1148,6 +1148,24 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 				))
 			}
 			v @ _ => Err(Error {message:format!("`make-array-at` expects array for first argument, got: {:?}", v)})
+		}
+	}));
+
+	insert(memory, "fn-unpack", Primitive::Builtin(|eval, args| {
+		if args.len() != 1 {
+			return Err(Error {message:format!("`get-position` expects exactly one argument")});
+		}
+		match eval.memory.value(args[0].clone()) {
+			Value::Fun => {
+				let spec_fun = eval.memory.fun_unpack(args[0].clone());
+				let name = if let Some(s) = spec_fun.name {
+					eval.memory.value_new(Value::Primitive(Primitive::String(s)))
+				} else {
+					eval.memory.nil()
+				};
+				Ok(BuiltinReturn::Value(eval.memory.array_from_handles(&[name, spec_fun.args, spec_fun.locals, spec_fun.body])))
+			}
+			v @ _ => Err(Error {message:format!("`get-position` expects fn, got: {:?}", v)}) // TODO: Display not Debug
 		}
 	}));
 

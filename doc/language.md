@@ -197,7 +197,7 @@ The local x has "leaked" . Blocks are not closures. If closure-like behavior is 
 
 	fun2 "idk"
 
-¹³ Note the args and locals of the fn here use the `{}` syntax, but these `{}`s aren't blocks; the `fn` builtin interprets the contents as lists of symbols rather than executing them. Initial values for args and locals *are* executed as code however, at the time `fn` is called.
+¹³ Note the args and locals of the fn here use the `{}` syntax, but these `{}`s aren't blocks; the `fn` builtin interprets the contents as lists of symbols rather than executing them. Warning, although the value on the right is executed like code, not just any code can go here; currently it must be an integer, a string, a quoted list, or a variable name.
 
 ## Data
 

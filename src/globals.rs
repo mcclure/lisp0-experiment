@@ -844,6 +844,22 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 	// --- Functions ---
 
 	fn fun_impl(name: &str, eval: &mut Eval, spec_body:MemHandle, spec_locals:Option<MemHandle>, spec_args:Option<MemHandle>, fun_name:Option<String>) -> Result<BuiltinReturn, Error> {
+		fn filter_initial(memory:&mut Memory, handle:MemHandle) -> Result<MemHandle, Error> {
+			match memory.value(handle.clone()) {
+				Value::Quote => Ok(memory.quote_get(handle)),
+				Value::Array => Err(Error {message:"Nested calls currently not supported for initial values".to_string()}),
+				Value::Primitive(key @ Primitive::String(_)) => {
+					let value = memory.dict_get(memory.globals.clone(), key.clone());
+					if let Some(value) = value {
+						Ok(value)
+					} else {
+						Err(Error {message:format!("Unrecognized variable in initials list: {}", key)})
+					}
+				}
+				_ => Ok(handle)
+			}
+		}
+
 		// Convert None spec_args to nil, throw on nonsense spec_args
 		let fun_args = if let Some(args) = &spec_args {
 			match eval.memory.value(args.clone()) {
@@ -866,7 +882,12 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 								if !matches!(eval.memory.value(sub_item.clone()), Value::Primitive(Primitive::String(_))) {
 									return bad(&eval, item.clone());
 								}
-								eval.memory.array_push(filtered.clone(), item.clone());
+								let pair = eval.memory.array_new();
+								eval.memory.array_push(pair.clone(), sub_item);
+								let sub_item_2 = eval.memory.array_get(item, 1).unwrap();
+								let sub_item_2 = filter_initial(&mut eval.memory, sub_item_2)?;
+								eval.memory.array_push(pair.clone(), sub_item_2);
+								eval.memory.array_push(filtered.clone(), pair);
 							}
 							_ =>
 								return bad(&eval, item.clone())
@@ -904,7 +925,8 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 									v @ _ =>
 										return Err(Error {message:format!("`{name}` locals item {idx}, key is not a string: {:?}", v)})
 								};
-								eval.memory.dict_set(filtered.clone(), key, value.clone());
+								let value = filter_initial(&mut eval.memory, value.clone())?;
+								eval.memory.dict_set(filtered.clone(), key, value);
 							}
 							_ =>
 								return bad(&eval, item.clone())

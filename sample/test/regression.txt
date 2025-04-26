@@ -52,6 +52,8 @@ basic/nil.l0
 basic/setprint.l0
 
 basic/fail/fail.l0
+basic/fail/fun-bad-initial.l0
+basic/fail/fun-nested-initial.l0
 basic/fail/if-malformed.l0
 basic/fail/lone-mid.l0
 basic/fail/math_1arg_divide.l0

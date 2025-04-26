@@ -113,6 +113,15 @@ set-fn 'e {c} {d 7} {
 e 6
 print ln
 
+# "initials"
+# Expect: 1 [true] B C OK 2 [true] F G OK [true]
+
+set 'z "OK"
+
+do {a 1, b "B", c 'C, d z} {e 2, f "F", g 'G, h z, i true} {
+	print a sp (is-int a) sp b sp c sp d sp e sp (is-int e) sp f sp g sp h sp i ln
+}
+
 # ---- Terrible or unintended mechanics
 
 # Recursion inner shadowing

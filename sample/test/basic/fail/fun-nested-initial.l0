@@ -1,0 +1,8 @@
+# Var lookup for initials is funny
+# Expect failure
+
+set 'y "OK"
+
+do {a 1, c y, d (len y)} {} {
+	print a sp b sp c ln 
+}

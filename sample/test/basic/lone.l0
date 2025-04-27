@@ -1,11 +1,12 @@
 # Test lone item
 
 # Expect: 3[nil][builtin]4
-# Expect: 5
+# Expect: 55
 # Expect: [nil] [builtin] 6
 # Expect: 7810
 # Expect: [array]9
 # Expect: [array][builtin]
+# Expect: 556
 
 print (print 3) print 4 ln
 
@@ -29,3 +30,18 @@ set 'fn2 {
 }
 
 print ln fn (fn) ln fn2 (fn2) ln
+
+# Purely accidental "LISP backward compatibility" caused by lone rule
+
+set 'ary [
+	["print", 5]
+	6
+]
+
+(ary)
+
+({
+	ary
+})
+
+print (ary) ln

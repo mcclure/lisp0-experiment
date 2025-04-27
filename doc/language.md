@@ -69,7 +69,7 @@ Programs in this language are a series of statements; statements are lists of wo
 - An array: This is `[]` square brackets containing one or more statements.
 - A quoted list: This is a `'` followed by a parenthesis-enclosed word list.
 
-A statement with only one word in it will be treated as a "return value". The "lone" value in this statement will not be executed as a function, but directly evaluates to its value. "Lone" values should only be used in arrays, or as the final line of a block (as otherwise they would be noops¹⁴).
+A statement with only one word in it will be treated as a "return value". The "lone" value in this statement will not be executed as a function¹⁵, but directly evaluates to its value. "Lone" values should only be used in arrays, or as the final line of a block (as otherwise they would be noops¹⁴).
 
 A statement may cross multiple lines by placing a `\\` at the end of a line; all whitespace after the `\\` will be treated as a single space. Newlines inside a function call or quoted list (as opposed to inside a block or array) will be treated as an error.
 
@@ -83,6 +83,7 @@ In advanced use: When interpreting a block or quoted list as data, identifiers b
 
 ² Entering a \' followed by an integer will do something surprising, so don't do that.
 ³ Note this means that a lone word by itself in the middle of a block is nonsensical; when executing code, this will be treated as an error.
+¹⁵ An exception: If you put a regular LISP stanza alone on a line, for example `(print 3 ln)`, that will be treated as a lone function call and executed normally. Technically this means `(func-name)` alone on a line has the same effect as `do func-name` alone on a line. I recommend not relying on this.
 ¹⁴ If you *want* a noop statement use `do discard`.
 
 ### Why "L0"?
@@ -197,7 +198,7 @@ The local x has "leaked" . Blocks are not closures. If closure-like behavior is 
 
 	fun2 "idk"
 
-¹³ Note the args and locals of the fn here use the `{}` syntax, but these `{}`s aren't blocks; the `fn` builtin interprets the contents as lists of symbols rather than executing them. Warning, although the value on the right is executed like code, not just any code can go here; currently it must be an integer, a string, a quoted list, or a variable name.
+¹³ Note the args and locals of the fn here use the `{}` syntax, but these `{}`s aren't blocks; the `fn` builtin interprets the contents as lists of symbols rather than executing them. Warning: Although the value on the right is executed like code, not just any code can go here; currently it must be an integer, a string, a quoted list, or a variable name.
 
 ## Data
 

@@ -28,7 +28,7 @@
 # Args
 # TODO: Consider simplifying these
 
-(set 'print-arg0 '(
+(set-fn 'print-arg0 '(&) nil '(
 	(print sp (len args) sp (get args 0))
 ))
 
@@ -39,7 +39,7 @@
 	(print-arg0 2)
 ))
 
-(set 'print-arg0-wrap-2 '(
+(set-fn 'print-arg0-wrap-2 '(&) '() '(
 	(print-arg0 (get args 0))
 	(print sp "|")
 	(print-arg0 (get args 1))
@@ -57,15 +57,15 @@
 
 # Args -- "higher order"
 
-(set 'print-minus '(
+(set-fn 'print-minus '(&) '() '(
 	(print (- (get args 0) 1) sp (- (get args 1) 1) ln)
 ))
 
-(set 'pass-on-minus '(
+(set-fn 'pass-on-minus '(&) '() '(
 	((get args 0) (- (get args 1) 1) (- (get args 2) 1))
 ))
 
-(set 'pass-on-minus-2 '(
+(set-fn 'pass-on-minus-2 '(&) '() '(
 	((get args 0) (- (get args 1) 1) (- (get args 2) 1))
 	((get args 0) (- (get args 1) 2) (- (get args 2) 2))
 ))

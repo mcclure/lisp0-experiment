@@ -1,11 +1,9 @@
-# Test lone item in make-array
+# Test lone item
 # Expect: 3[nil][builtin]4
 # Expect: 5
 # Expect: [nil] [builtin] 6
-# Expect: 79
-# Expect: [array]10
-# Expect: 17191719
-# Expect: [array]3
+# Expect: 7
+# Expect failure
 
 (print (print 3) print 4 ln)
 
@@ -15,7 +13,7 @@
 
 (set 'fn '(
 	(print 7)
-	(discard 8)
+	8 # Lones in make-array legal in ls0, but not this
 	(print 9)
 	10
 ))
@@ -24,7 +22,7 @@
 
 (set 'fn '(
 	(print 17)
-	(discard 8)
+	8 # Lones in make-array legal in ls0, but not this
 	(print 19)
 	ary
 ))

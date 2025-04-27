@@ -9,21 +9,21 @@
 # Expect: Arg 3 30
 # Expect: 106
 
-set 'noarg {
+set-fn 'noarg '(&) {} {
 	print "No arg " (len args) ln
 }
 
-set 'noarg2 {
+set-fn 'noarg2 '(&) {} {
 	print "No arg[2] " (len args) ln
 	return 105
 }
 
-set 'noarg3 {
+set-fn 'noarg3 '(&) {} {
 	print "No arg[3] "
 	do noarg2
 }
 
-set 'argprint {
+set-fn 'argprint '(&) {} {
 	print "Arg " (len args) ln
 	print "Arg 1 " (get args 0) ln
 	print "Arg 2 " (get args 1) ln

@@ -40,6 +40,7 @@ basic/lisp/type-test.ls0
 
 basic/lisp/fail/no-parens.ls0
 basic/lisp/fail/no-such-var.ls0
+basic/lisp/fail/lone.ls0
 
 basic/flow.l0
 basic/fun.l0

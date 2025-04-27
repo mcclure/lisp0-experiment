@@ -1,11 +1,12 @@
-# Expect: [true][nil][nil][nil][nil][nil][nil][nil] int
-# Expect: [nil][true][nil][nil][nil][nil][nil][nil] string
-# Expect: [nil][nil][true][nil][nil][nil][nil][true] builtin
-# Expect: [nil][nil][nil][true][nil][nil][nil][nil] quote
-# Expect: [nil][nil][nil][nil][true][nil][nil][true] array
-# Expect: [nil][nil][nil][nil][nil][true][nil][nil] dict
-# Expect: [nil][nil][nil][nil][nil][nil][true][nil] nil
-# Expect: [nil][nil][nil][nil][nil][nil][true][nil] true
+# Expect: [true][nil][nil][nil][nil][nil][nil][nil][nil] int
+# Expect: [nil][true][nil][nil][nil][nil][nil][nil][nil] string
+# Expect: [nil][nil][true][nil][nil][nil][nil][nil][true] builtin
+# Expect: [nil][nil][nil][true][nil][nil][nil][nil][nil] quote
+# Expect: [nil][nil][nil][nil][true][nil][nil][nil][true] array
+# Expect: [nil][nil][nil][nil][nil][true][nil][nil][nil] dict
+# Expect: [nil][nil][nil][nil][nil][nil][true][nil][true] fn
+# Expect: [nil][nil][nil][nil][nil][nil][nil][true][nil] nil
+# Expect: [nil][nil][nil][nil][nil][nil][nil][true][nil] true
 
 (set 'int 3)
 (set 'string "string")
@@ -13,12 +14,14 @@
 (set 'quote ''())
 (set 'array (make-array))
 (set 'dict (make-dict))
+(set 'func (fn {}))
 
-(print (is-int int) (is-string int) (is-builtin int) (is-quote int) (is-array int) (is-dict int) (is-bool int) (is-callable int) " int" ln)
-(print (is-int string) (is-string string) (is-builtin string) (is-quote string) (is-array string) (is-dict string) (is-bool string) (is-callable string) " string" ln)
-(print (is-int builtin) (is-string builtin) (is-builtin builtin) (is-quote builtin) (is-array builtin) (is-dict builtin) (is-bool builtin) (is-callable builtin) " builtin" ln)
-(print (is-int quote) (is-string quote) (is-builtin quote) (is-quote quote) (is-array quote) (is-dict quote) (is-bool quote) (is-callable quote) " quote" ln)
-(print (is-int array) (is-string array) (is-builtin array) (is-quote array) (is-array array) (is-dict array) (is-bool array) (is-callable array) " array" ln)
-(print (is-int dict) (is-string dict) (is-builtin dict) (is-quote dict) (is-array dict) (is-dict dict) (is-bool dict) (is-callable dict) " dict" ln)
-(print (is-int nil) (is-string nil) (is-builtin nil) (is-quote nil) (is-array nil) (is-dict nil) (is-bool nil) (is-callable nil) " nil" ln)
-(print (is-int true) (is-string true) (is-builtin true) (is-quote true) (is-array true) (is-dict true) (is-bool true) (is-callable true) " true" ln)
+(print (is-int int) (is-string int) (is-builtin int) (is-quote int) (is-array int) (is-dict int) (is-fn int) (is-bool int) (is-callable int) " int" ln)
+(print (is-int string) (is-string string) (is-builtin string) (is-quote string) (is-array string) (is-dict string) (is-fn string) (is-bool string) (is-callable string) " string" ln)
+(print (is-int builtin) (is-string builtin) (is-builtin builtin) (is-quote builtin) (is-array builtin) (is-dict builtin) (is-fn builtin) (is-bool builtin) (is-callable builtin) " builtin" ln)
+(print (is-int quote) (is-string quote) (is-builtin quote) (is-quote quote) (is-array quote) (is-dict quote) (is-fn quote) (is-bool quote) (is-callable quote) " quote" ln)
+(print (is-int array) (is-string array) (is-builtin array) (is-quote array) (is-array array) (is-dict array) (is-fn array) (is-bool array) (is-callable array) " array" ln)
+(print (is-int dict) (is-string dict) (is-builtin dict) (is-quote dict) (is-array dict) (is-dict dict) (is-fn dict) (is-bool dict) (is-callable dict) " dict" ln)
+(print (is-int func) (is-string func) (is-builtin func) (is-quote func) (is-array func) (is-dict ) (is-bool ) (is-callable ) " fn" ln)
+(print (is-int nil) (is-string nil) (is-builtin nil) (is-quote nil) (is-array nil) (is-dict nil) (is-fn nil) (is-bool nil) (is-callable nil) " nil" ln)
+(print (is-int true) (is-string true) (is-builtin true) (is-quote true) (is-array true) (is-dict true) (is-fn true) (is-bool true) (is-callable true) " true" ln)

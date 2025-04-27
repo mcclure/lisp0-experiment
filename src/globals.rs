@@ -362,8 +362,9 @@ pub fn populate(memory: &mut Memory, args:&[String]) {
 	insert_is!("is-quote", Value::Quote);
 	insert_is!("is-array", Value::Array);
 	insert_is!("is-dict", Value::Dict);
+	insert_is!("is-fn", Value::Fun);
 	insert_is!("is-bool", Value::Primitive(Primitive::Nil) | Value::Primitive(Primitive::True));
-	insert_is!("is-callable", Value::Array | Value::Primitive(Primitive::Builtin(_)));
+	insert_is!("is-callable", Value::Array | Value::Fun | Value::Primitive(Primitive::Builtin(_)));
 
 	insert(memory, "is-int", Primitive::Builtin(|eval, args| {
 		if args.len() != 1 {

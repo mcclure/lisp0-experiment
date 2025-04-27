@@ -1,6 +1,6 @@
 # Convoluted expressions to test quotes
 # Arg: --debug-ast
-# Expect: (("a", '"b", "c"), (('"e ", '" f")), ("g", '"h\t\ni\\j\"k", '"lm n", "o"), ("p"))
+# Expect: (("a", '"b", "c"), ('"e ", '" f"), ("g", '"h\t\ni\\j\"k", '"lm n", "o"), "p")
 
 
 a "b" c
